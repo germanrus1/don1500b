@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Skill(anthropic-skills:docx)",
+      "Skill(anthropic-skills:docx:*)",
+      "Read(//d/Projects/Бортовой компьютер Дон 1500б/**)",
+      "Bash(python \"C:\\\\Users\\\\mrger\\\\AppData\\\\Roaming\\\\Claude\\\\local-agent-mode-sessions\\\\skills-plugin\\\\85b75b84-4ed1-4132-80fd-315d59acc227\\\\58e6d449-3271-497c-a697-ba413781b675\\\\skills\\\\docx\\\\scripts\\\\office\\\\unpack.py\" \"Пайплайн.docx\" \"unpacked_pipeline/\")",
+      "Bash(pandoc \"Пайплайн.docx\" -o pipeline_content.md)",
+      "Bash(python -c ' *)",
+      "Bash(Get-ChildItem -Recurse \"D:\\\\Projects\\\\Бортовой компьютер Дон 1500б\")",
+      "Bash(Select-Object FullName, Length)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(python -c \"import PyQt6; print\\('PyQt6 OK, version:', PyQt6.QtCore.PYQT_VERSION_STR\\)\")",
+      "Bash(pip install *)",
+      "Bash(python -c \"import PyQt6; print\\('PyQt6 OK:', PyQt6.QtCore.PYQT_VERSION_STR\\)\")",
+      "Bash(python -c \"from PyQt6.QtCore import PYQT_VERSION_STR; print\\('PyQt6 OK:', PYQT_VERSION_STR\\)\")",
+      "Bash(timeout 8 python main.py)",
+      "Bash(echo \"Exit: $?\")",
+      "mcp__Claude_in_Chrome__tabs_context_mcp"
+    ]
+  }
+}
