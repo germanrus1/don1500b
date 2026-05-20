@@ -16,7 +16,10 @@
       "Bash(python -c \"from PyQt6.QtCore import PYQT_VERSION_STR; print\\('PyQt6 OK:', PYQT_VERSION_STR\\)\")",
       "Bash(timeout 8 python main.py)",
       "Bash(echo \"Exit: $?\")",
-      "mcp__Claude_in_Chrome__tabs_context_mcp"
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(rm \"D:/Projects/Бортовой компьютер Дон 1500б/app\"/menu_*.png 2>/dev/null; echo \"cleaned\")"
     ]
   }
 }

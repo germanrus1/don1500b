@@ -22,7 +22,7 @@ def build_stylesheet(config: ConfigLoader, theme: str = "light") -> str:
     desc_bg = "#2D2D2D" if theme == "light" else "#404040"
     desc_fg = "#FFFFFF"
 
-    return f"""
+    stylesheet = f"""
 QMainWindow, QWidget {{
     background-color: {bg};
     color: {fg};
@@ -39,6 +39,10 @@ QLabel {{
 QLabel#labelTime {{
     font-size: {f_time}px;
     font-weight: bold;
+}}
+QLabel#labelCulture {{
+    font-size: {f_label}px;
+    color: {fg2};
 }}
 QPushButton#btnMenu {{
     background-color: {bg};
@@ -98,4 +102,108 @@ QPushButton#errorDescClose {{
 QPushButton#errorDescClose:hover {{
     color: #FF6B6B;
 }}
+
+/* ── Menu dialog ───────────────────────────────────────── */
+QPushButton#menuNavBtn {{
+    background-color: {bg};
+    color: {fg};
+    border: 2px solid {border};
+    border-radius: 8px;
+    font-size: 17px;
+}}
+QPushButton#menuNavBtn:hover {{
+    background-color: {menu_bg};
+}}
+QPushButton#menuCloseBtn {{
+    background-color: {menu_bg};
+    color: {fg2};
+    border: 1px solid {border};
+    border-radius: 6px;
+    font-size: 15px;
+}}
+QPushButton#menuBackBtn {{
+    background-color: transparent;
+    color: {fg};
+    border: none;
+    font-size: 20px;
+    font-weight: bold;
+}}
+QPushButton#menuBackBtn:hover {{
+    color: {err_orange};
+}}
+QWidget#menuHeader {{
+    background-color: {menu_bg};
+    border-bottom: 1px solid {border};
+}}
+QLabel#menuPageTitle {{
+    font-size: 18px;
+    font-weight: bold;
+    color: {fg};
+    background: transparent;
+}}
+QLabel#menuSectionLabel {{
+    font-size: 14px;
+    color: {fg2};
+    background: transparent;
+}}
+QLabel#menuStatValue {{
+    font-size: 20px;
+    font-weight: bold;
+    color: {fg};
+    background: transparent;
+}}
+QLabel#menuTableHeader {{
+    font-size: 13px;
+    font-weight: bold;
+    color: {fg2};
+    background: transparent;
+}}
+QLabel#menuTableRow {{
+    font-size: 13px;
+    color: {fg};
+    background: transparent;
+}}
+QPushButton#menuToggleBtn {{
+    background-color: {bg};
+    color: {fg};
+    border: 2px solid {border};
+    border-radius: 6px;
+    font-size: 15px;
+    padding: 4px 8px;
+}}
+QPushButton#menuToggleBtn:checked {{
+    background-color: #2E86AB;
+    color: #FFFFFF;
+    border-color: #1A6A8A;
+}}
+QPushButton#menuToggleBtn:hover:!checked {{
+    background-color: {menu_bg};
+}}
+QPushButton#menuDangerBtn {{
+    background-color: {err_red};
+    color: #FFFFFF;
+    border: none;
+    border-radius: 8px;
+    font-size: 17px;
+    font-weight: bold;
+}}
+QPushButton#menuDangerBtn:hover {{
+    background-color: #C0303A;
+}}
+QFrame#menuSep {{
+    border: none;
+    border-bottom: 1px solid {border};
+    background: transparent;
+}}
 """
+
+    if config.ui.get("transparent", False):
+        stylesheet += f"""
+QMainWindow {{ background: transparent; }}
+QWidget {{ background: transparent; }}
+QFrame#panelCenter {{ background: transparent; }}
+QFrame#panelRight {{ background: transparent; border: none; }}
+QWidget#topBar {{ background-color: {menu_bg}; border-bottom: 1px solid {border}; }}
+"""
+
+    return stylesheet

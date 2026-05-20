@@ -1,6 +1,7 @@
 import csv
 from datetime import datetime
 from pathlib import Path
+from typing import List
 
 
 class DataLogger:
@@ -23,6 +24,14 @@ class DataLogger:
 
     def log_system(self, event: str):
         self._write("system", "system", "", "", "info", event)
+
+    def read_errors(self, max_entries: int = 20) -> List[dict]:
+        filepath = self._data_dir / f"{datetime.now().strftime(self._date_fmt)}.csv"
+        if not filepath.exists():
+            return []
+        with open(filepath, encoding="utf-8", newline="") as f:
+            rows = [r for r in csv.DictReader(f) if r.get("event_type") == "error"]
+        return rows[-max_entries:]
 
     def _write(self, event_type: str, sensor_name: str, value, unit: str, status: str, details: str = ""):
         if not self._enabled:

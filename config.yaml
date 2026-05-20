@@ -1,33 +1,18 @@
-# Конфигурация бортового компьютера Дон 1500б
-# Формат: YAML
-
-# ============================================================================
-# РЕЖИМ РАБОТЫ
-# ============================================================================
-mode: prod  # prod (боевой) или dev (разработка с отладочным окном)
-
-# ============================================================================
-# ДАТЧИКИ
-# ============================================================================
+mode: prod
 sensors:
-  polling_frequency_hz: 50  # Частота опроса GPIO: 50 Hz (каждые 20 мс)
-  
-  # Список датчиков
+  polling_frequency_hz: 50
   list:
-    # === ИМПУЛЬСНЫЙ ДАТЧИК: Барабан ===
     drum:
       gpio: 17
-      type: impulse          # Тип: impulse (обороты), discrete (да/нет), analog (значение)
-      nominal_rpm: 800       # Номинальное значение об/мин
-      warn_low: 600          # Оранжевая иконка если ниже
-      warn_high: 1000        # Оранжевая иконка если выше
-      error_threshold_low: 100    # Красная иконка если ниже (почти ноль)
-      error_duration_ms: 2000     # Как долго быть в ошибке перед отображением
-      debounce_ms: 50             # Фильтрация помех (мс)
-      description: "Скорость вращения барабана"
-      units: "об/мин"
-    
-    # === ИМПУЛЬСНЫЙ ДАТЧИК: Колоса ===
+      type: impulse
+      nominal_rpm: 800
+      warn_low: 600
+      warn_high: 1000
+      error_threshold_low: 100
+      error_duration_ms: 2000
+      debounce_ms: 50
+      description: Скорость вращения барабана
+      units: об/мин
     kolosa:
       gpio: 27
       type: impulse
@@ -37,10 +22,8 @@ sensors:
       error_threshold_low: 50
       error_duration_ms: 2000
       debounce_ms: 50
-      description: "Скорость вращения колосового механизма"
-      units: "об/мин"
-    
-    # === ИМПУЛЬСНЫЙ ДАТЧИК: Соломотряс ===
+      description: Скорость вращения колосового механизма
+      units: об/мин
     solomotryas:
       gpio: 24
       type: impulse
@@ -50,10 +33,8 @@ sensors:
       error_threshold_low: 80
       error_duration_ms: 2000
       debounce_ms: 50
-      description: "Скорость вращения соломотряса"
-      units: "об/мин"
-    
-    # === ИМПУЛЬСНЫЙ ДАТЧИК: Вентилятор ===
+      description: Скорость вращения соломотряса
+      units: об/мин
     fan_speed:
       gpio: 23
       type: impulse
@@ -63,140 +44,89 @@ sensors:
       error_threshold_low: 200
       error_duration_ms: 2000
       debounce_ms: 50
-      description: "Скорость вращения вентилятора"
-      units: "об/мин"
-    
-    # === ДИСКРЕТНЫЙ ДАТЧИК: Уровень бункера ===
+      description: Скорость вращения вентилятора
+      units: об/мин
     bin_level:
       gpio: 22
-      type: discrete         # 1 = заполнен, 0 = пуст
-      description: "Уровень заполнения бункера"
-      units: "статус"
+      type: discrete
+      description: Уровень заполнения бункера
+      units: статус
       debounce_ms: 100
-    
-    # === ДОПОЛНИТЕЛЬНЫЕ ДАТЧИКИ (для будущего) ===
-    # speed:
-    #   gpio: 25
-    #   type: impulse
-    #   nominal_rpm: 500
-    #   units: "км/ч"
-    #
-    # engine_rpm:
-    #   gpio: 26
-    #   type: impulse
-    #   nominal_rpm: 1500
-    #   units: "об/мин"
-
-# ============================================================================
-# РАЗГРУЗКА БУНКЕРА
-# ============================================================================
 unload_logic:
-  bin_full_sensor: 22              # GPIO пин датчика уровня бункера
-  min_full_duration_ms: 1000       # Минимум мс быть заполненным
-  min_empty_duration_ms: 500       # Минимум мс быть пустым
-  debounce_ms: 100                 # Фильтрация помех
-  description: "Логика определения событий разгрузки"
-
-# ============================================================================
-# ИСТОРИЯ ОШИБОК
-# ============================================================================
+  bin_full_sensor: 22
+  min_full_duration_ms: 1000
+  min_empty_duration_ms: 500
+  debounce_ms: 100
+  description: Логика определения событий разгрузки
 error_history:
-  max_entries: 20  # Сохранять последние 20 ошибок
-
-# ============================================================================
-# ЛОГИРОВАНИЕ ДАННЫХ
-# ============================================================================
+  max_entries: 20
 logging:
-  data_dir: data            # Папка для логов
-  date_format: "%Y-%m-%d"   # Формат даты в имени файла (YYYY-MM-DD)
+  data_dir: data
+  date_format: '%Y-%m-%d'
   csv_log_enabled: true
-  description: "Логирование событий в CSV"
-
-# ============================================================================
-# ИНТЕРФЕЙС (UI)
-# ============================================================================
+  description: Логирование событий в CSV
 ui:
-  # Разрешение дисплея
   resolution:
     width: 1200
     height: 600
-  
-  orientation: horizontal   # Горизонтальная ориентация
-  
-  # Адаптивные размеры шрифтов (px)
+  orientation: horizontal
   fonts:
-    title: 32      # Заголовки в интерфейсе
-    value: 28      # Основные значения датчиков (об/мин, скорость)
-    label: 16      # Подписи датчиков
-    time: 24       # Текущее время вверху
-    menu: 18       # Меню и диалоги
-  
-  # Тема по умолчанию
-  theme: light    # light или dark
-  
-  # Цвета для светлого режима (день)
+    title: 32
+    value: 28
+    label: 16
+    time: 24
+    menu: 18
+  theme: light
+  window_mode: windowed
+  transparent: false
   colors_light:
-    background: "#FFFFFF"
-    text_primary: "#000000"
-    text_secondary: "#666666"
-    error_critical: "#E63946"      # Красная иконка (критическая ошибка)
-    error_warning: "#F77F00"       # Оранжевая иконка (отклонение от нормы)
-    border: "#CCCCCC"
-    menu_background: "#F5F5F5"
-  
-  # Цвета для темного режима (ночь)
+    background: '#FFFFFF'
+    text_primary: '#000000'
+    text_secondary: '#666666'
+    error_critical: '#E63946'
+    error_warning: '#F77F00'
+    border: '#CCCCCC'
+    menu_background: '#F5F5F5'
   colors_dark:
-    background: "#1E1E1E"
-    text_primary: "#FFFFFF"
-    text_secondary: "#AAAAAA"
-    error_critical: "#FF6B6B"      # Ярче красная
-    error_warning: "#FFB800"       # Ярче оранжевая
-    border: "#333333"
-    menu_background: "#2A2A2A"
-
-# ============================================================================
-# ПАРАМЕТРЫ ИНТЕРФЕЙСА
-# ============================================================================
+    background: '#1E1E1E'
+    text_primary: '#FFFFFF'
+    text_secondary: '#AAAAAA'
+    error_critical: '#FF6B6B'
+    error_warning: '#FFB800'
+    border: '#333333'
+    menu_background: '#2A2A2A'
 interface:
-  # Какие датчики отображать на главном экране
   display_sensors:
-    - drum
-    - kolosa
-    - solomotryas
-    - fan_speed
-  
-  # Главный датчик (если он не вращается, остальные игнорируются)
+  - drum
+  - kolosa
+  - solomotryas
+  - fan_speed
   main_sensor: drum
-  
-  # Обновление экрана (Hz)
   ui_update_frequency_hz: 10
-  
-  # Показ времени
   show_time: true
-  time_format: "%H:%M:%S"  # HH:MM:SS
-  
-  # Показ иконок ошибок в центре
+  time_format: '%H:%M:%S'
   show_error_icons: true
-  
-  # Максимум иконок ошибок до переноса на следующую строку
   max_error_icons_per_row: 5
-  
-  # Диалоги
+  cultures:
+  - Пшеница
+  - Ячмень
+  - Рапс
+  - Подсолнечник
+  - Кукуруза
+  - Горох
+  - Гречиха
+  - Овёс
   dialogs:
-    show_shutdown_confirmation: true  # Подтверждение перед выключением
-
-# ============================================================================
-# ЗАМЕТКИ И ОПИСАНИЕ
-# ============================================================================
+    show_shutdown_confirmation: true
 project_info:
-  name: "Бортовой компьютер Дон 1500б"
-  version: "1.0.0"
-  description: "Система мониторинга датчиков комбайна на основе Raspberry Pi 5"
+  name: Бортовой компьютер Дон 1500б
+  version: 1.0.0
+  description: Система мониторинга датчиков комбайна на основе Raspberry Pi 5
   hardware:
-    - "Raspberry Pi 5"
-    - "Дисплей 1200×600 (7 дюймов, сенсорный)"
-    - "Модуль оптической изоляции (8-канальный, 24V to 5V)"
-    - "Датчики (импульсные, дискретные, аналоговые)"
-  os: "Ubuntu 24.04 LTS"
-  python_version: "3.11+"
-  last_updated: "2024-05-20"
+  - Raspberry Pi 5
+  - Дисплей 1200×600 (7 дюймов, сенсорный)
+  - Модуль оптической изоляции (8-канальный, 24V to 5V)
+  - Датчики (импульсные, дискретные, аналоговые)
+  os: Ubuntu 24.04 LTS
+  python_version: 3.11+
+  last_updated: '2024-05-20'
