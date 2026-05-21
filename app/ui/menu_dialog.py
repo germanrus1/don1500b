@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, QSize, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 
 from app.config.config_loader import ConfigLoader
 from app.logger.data_logger import DataLogger
+from app.ui.app_icons import icon as ui_icon
 from app.ui.styles import build_stylesheet
 
 
@@ -100,6 +101,15 @@ class MenuDialog(QDialog):
     def _goto(self, idx: int):
         self._stack.setCurrentIndex(idx)
 
+    def _icon_color(self) -> str:
+        """Icon tint matching current theme (text primary color)."""
+        key = "colors_dark" if self._theme == "dark" else "colors_light"
+        return self._config.ui.get(key, {}).get("text_primary", "#1A1A1A")
+
+    def _primary_color(self) -> str:
+        key = "colors_dark" if self._theme == "dark" else "colors_light"
+        return self._config.ui.get(key, {}).get("primary", "#1565C0")
+
     def _back_header(self, title: str) -> QWidget:
         header = QWidget()
         header.setObjectName("menuHeader")
@@ -109,7 +119,9 @@ class MenuDialog(QDialog):
         row.setContentsMargins(12, 0, 12, 0)
         row.setSpacing(8)
 
-        back = QPushButton("←")
+        back = QPushButton()
+        back.setIcon(ui_icon("back", color=self._primary_color()))
+        back.setIconSize(QSize(24, 24))
         back.setObjectName("menuBackBtn")
         back.setFixedSize(46, 46)
         back.clicked.connect(lambda: self._goto(_PAGE_MAIN))
@@ -130,13 +142,16 @@ class MenuDialog(QDialog):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(10)
 
-        for text, idx in [
-            ("⚙   Настройки",       _PAGE_SETTINGS),
-            ("📊  Статистика",       _PAGE_STATS),
-            ("⚠   История ошибок",  _PAGE_ERRORS),
-            ("⏻   Выключение",       _PAGE_SHUTDOWN),
+        icon_color = self._icon_color()
+        for icon_key, text, idx in [
+            ("settings", "Настройки",      _PAGE_SETTINGS),
+            ("stats",    "Статистика",     _PAGE_STATS),
+            ("errors",   "История ошибок", _PAGE_ERRORS),
+            ("shutdown", "Выключение",     _PAGE_SHUTDOWN),
         ]:
-            btn = QPushButton(text)
+            btn = QPushButton(f"  {text}")
+            btn.setIcon(ui_icon(icon_key, color=icon_color))
+            btn.setIconSize(QSize(26, 26))
             btn.setFixedHeight(64)
             btn.setObjectName("menuNavBtn")
             btn.clicked.connect(lambda _, i=idx: self._goto(i))
@@ -173,7 +188,11 @@ class MenuDialog(QDialog):
         theme_group = QButtonGroup(self)
         theme_group.setExclusive(True)
 
-        btn_light = QPushButton("☀  Светлая")
+        icon_color = self._icon_color()
+
+        btn_light = QPushButton("  Светлая")
+        btn_light.setIcon(ui_icon("theme_light", color=icon_color))
+        btn_light.setIconSize(QSize(20, 20))
         btn_light.setCheckable(True)
         btn_light.setChecked(self._theme == "light")
         btn_light.setFixedHeight(48)
@@ -182,7 +201,9 @@ class MenuDialog(QDialog):
         theme_group.addButton(btn_light)
         theme_row.addWidget(btn_light)
 
-        btn_dark = QPushButton("🌙  Тёмная")
+        btn_dark = QPushButton("  Тёмная")
+        btn_dark.setIcon(ui_icon("theme_dark", color=icon_color))
+        btn_dark.setIconSize(QSize(20, 20))
         btn_dark.setCheckable(True)
         btn_dark.setChecked(self._theme == "dark")
         btn_dark.setFixedHeight(48)
@@ -201,7 +222,9 @@ class MenuDialog(QDialog):
         tr_group.setExclusive(True)
         current_tr = self._config.ui.get("transparent", False)
 
-        btn_opaque = QPushButton("◼  Обычное")
+        btn_opaque = QPushButton("  Обычное")
+        btn_opaque.setIcon(ui_icon("opaque", color=icon_color))
+        btn_opaque.setIconSize(QSize(20, 20))
         btn_opaque.setCheckable(True)
         btn_opaque.setChecked(not current_tr)
         btn_opaque.setFixedHeight(48)
@@ -210,7 +233,9 @@ class MenuDialog(QDialog):
         tr_group.addButton(btn_opaque)
         tr_row.addWidget(btn_opaque)
 
-        btn_transp = QPushButton("◻  Прозрачное")
+        btn_transp = QPushButton("  Прозрачное")
+        btn_transp.setIcon(ui_icon("transparent", color=icon_color))
+        btn_transp.setIconSize(QSize(20, 20))
         btn_transp.setCheckable(True)
         btn_transp.setChecked(current_tr)
         btn_transp.setFixedHeight(48)
@@ -229,7 +254,9 @@ class MenuDialog(QDialog):
         win_group.setExclusive(True)
         current_mode = self._config.ui.get("window_mode", "windowed")
 
-        btn_win = QPushButton("⊡  Оконный")
+        btn_win = QPushButton("  Оконный")
+        btn_win.setIcon(ui_icon("windowed", color=icon_color))
+        btn_win.setIconSize(QSize(20, 20))
         btn_win.setCheckable(True)
         btn_win.setChecked(current_mode == "windowed")
         btn_win.setFixedHeight(48)
@@ -238,7 +265,9 @@ class MenuDialog(QDialog):
         win_group.addButton(btn_win)
         win_row.addWidget(btn_win)
 
-        btn_full = QPushButton("⛶  Полный экран")
+        btn_full = QPushButton("  Полный экран")
+        btn_full.setIcon(ui_icon("fullscreen", color=icon_color))
+        btn_full.setIconSize(QSize(20, 20))
         btn_full.setCheckable(True)
         btn_full.setChecked(current_mode == "fullscreen")
         btn_full.setFixedHeight(48)

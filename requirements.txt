@@ -3,3 +3,4 @@
 
 PyQt6>=6.4.0
 PyYAML>=6.0.0
+QtAwesome>=1.3.0

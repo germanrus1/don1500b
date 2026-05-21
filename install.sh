@@ -9,6 +9,7 @@ echo "[1/4] Устанавливаем системные пакеты..."
 sudo apt-get update -q
 sudo apt-get install -y \
     python3-pyqt6 \
+    python3-yaml \
     python3-pip \
     python3-venv \
     libxcb-cursor0 \
