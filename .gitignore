@@ -19,6 +19,9 @@ build/
 # Runtime data (CSV logs, создаются автоматически)
 data/
 
+# Документация разработки (не для репозитория)
+ROADMAP.docx
+
 # Temp files
 screenshot.png
 *.tmp

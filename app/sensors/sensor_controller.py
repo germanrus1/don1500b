@@ -68,6 +68,7 @@ class SensorController(QThread):
 
     def _setup_gpio(self, sensors_list: dict):
         import RPi.GPIO as GPIO  # noqa: PLC0415
+        # On RPi5 install rpi-lgpio (pip install rpi-lgpio) — it registers as RPi.GPIO
         self._gpio = GPIO
         GPIO.setmode(GPIO.BCM)
         for name, cfg in sensors_list.items():
@@ -98,11 +99,11 @@ class SensorController(QThread):
 
     def run(self):
         self._running = True
-        sensors_list = self._config.sensors.get("list", {})
         hz = self._config.interface.get("ui_update_frequency_hz", 10)
         interval = 1.0 / hz
 
         while self._running:
+            sensors_list = self._config.sensors.get("list", {})
             readings = self._read_all(sensors_list)
             self.state_updated.emit(readings)
             time.sleep(interval)
@@ -127,6 +128,8 @@ class SensorController(QThread):
         readings: Dict[str, SensorReading] = {}
 
         for name, cfg in sensors_list.items():
+            if not cfg.get("enabled", True):
+                continue
             sensor_type = cfg.get("type")
 
             if sensor_type == "impulse":

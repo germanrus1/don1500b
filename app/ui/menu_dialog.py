@@ -53,6 +53,7 @@ class MenuDialog(QDialog):
     culture_changed      = pyqtSignal(str)   # culture name
     window_mode_changed  = pyqtSignal(str)   # "windowed" | "fullscreen"
     transparent_changed  = pyqtSignal(bool)  # True = transparent
+    sensors_changed      = pyqtSignal()      # any sensor enabled/panel flag changed
 
     def __init__(
         self,
@@ -62,15 +63,22 @@ class MenuDialog(QDialog):
         current_theme: str = "light",
         parent=None,
     ):
-        super().__init__(parent)
+        super().__init__(parent, Qt.WindowType.FramelessWindowHint | Qt.WindowType.Dialog)
         self._config = config
         self._stats = stats           # {unload_count, culture, work_start}
         self._logger = logger
         self._theme = current_theme
 
-        self.setWindowTitle("Меню")
         self.setModal(True)
         self.setFixedSize(580, 500)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
+
+        if parent is not None:
+            pg = parent.geometry()
+            self.move(
+                pg.x() + (pg.width()  - 580) // 2,
+                pg.y() + (pg.height() - 500) // 2,
+            )
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -103,7 +111,7 @@ class MenuDialog(QDialog):
 
         back = QPushButton("←")
         back.setObjectName("menuBackBtn")
-        back.setFixedSize(40, 38)
+        back.setFixedSize(46, 46)
         back.clicked.connect(lambda: self._goto(_PAGE_MAIN))
         row.addWidget(back)
 
@@ -129,7 +137,7 @@ class MenuDialog(QDialog):
             ("⏻   Выключение",       _PAGE_SHUTDOWN),
         ]:
             btn = QPushButton(text)
-            btn.setFixedHeight(58)
+            btn.setFixedHeight(64)
             btn.setObjectName("menuNavBtn")
             btn.clicked.connect(lambda _, i=idx: self._goto(i))
             layout.addWidget(btn)
@@ -138,7 +146,7 @@ class MenuDialog(QDialog):
 
         close = QPushButton("Закрыть")
         close.setObjectName("menuCloseBtn")
-        close.setFixedHeight(44)
+        close.setFixedHeight(50)
         close.clicked.connect(self.accept)
         layout.addWidget(close)
 
@@ -168,7 +176,7 @@ class MenuDialog(QDialog):
         btn_light = QPushButton("☀  Светлая")
         btn_light.setCheckable(True)
         btn_light.setChecked(self._theme == "light")
-        btn_light.setFixedHeight(44)
+        btn_light.setFixedHeight(48)
         btn_light.setObjectName("menuToggleBtn")
         btn_light.clicked.connect(lambda: self._on_theme("light"))
         theme_group.addButton(btn_light)
@@ -177,13 +185,41 @@ class MenuDialog(QDialog):
         btn_dark = QPushButton("🌙  Тёмная")
         btn_dark.setCheckable(True)
         btn_dark.setChecked(self._theme == "dark")
-        btn_dark.setFixedHeight(44)
+        btn_dark.setFixedHeight(48)
         btn_dark.setObjectName("menuToggleBtn")
         btn_dark.clicked.connect(lambda: self._on_theme("dark"))
         theme_group.addButton(btn_dark)
         theme_row.addWidget(btn_dark)
 
         bl.addLayout(theme_row)
+
+        # ── Transparency ───────────────────────────────────────────────────
+        bl.addWidget(self._section_label("Прозрачность окна"))
+
+        tr_row = QHBoxLayout()
+        tr_group = QButtonGroup(self)
+        tr_group.setExclusive(True)
+        current_tr = self._config.ui.get("transparent", False)
+
+        btn_opaque = QPushButton("◼  Обычное")
+        btn_opaque.setCheckable(True)
+        btn_opaque.setChecked(not current_tr)
+        btn_opaque.setFixedHeight(48)
+        btn_opaque.setObjectName("menuToggleBtn")
+        btn_opaque.clicked.connect(lambda: self._on_transparent(False))
+        tr_group.addButton(btn_opaque)
+        tr_row.addWidget(btn_opaque)
+
+        btn_transp = QPushButton("◻  Прозрачное")
+        btn_transp.setCheckable(True)
+        btn_transp.setChecked(current_tr)
+        btn_transp.setFixedHeight(48)
+        btn_transp.setObjectName("menuToggleBtn")
+        btn_transp.clicked.connect(lambda: self._on_transparent(True))
+        tr_group.addButton(btn_transp)
+        tr_row.addWidget(btn_transp)
+
+        bl.addLayout(tr_row)
 
         # ── Window mode ────────────────────────────────────────────────────
         bl.addWidget(self._section_label("Режим окна"))
@@ -196,7 +232,7 @@ class MenuDialog(QDialog):
         btn_win = QPushButton("⊡  Оконный")
         btn_win.setCheckable(True)
         btn_win.setChecked(current_mode == "windowed")
-        btn_win.setFixedHeight(44)
+        btn_win.setFixedHeight(48)
         btn_win.setObjectName("menuToggleBtn")
         btn_win.clicked.connect(lambda: self._on_window_mode("windowed"))
         win_group.addButton(btn_win)
@@ -205,7 +241,7 @@ class MenuDialog(QDialog):
         btn_full = QPushButton("⛶  Полный экран")
         btn_full.setCheckable(True)
         btn_full.setChecked(current_mode == "fullscreen")
-        btn_full.setFixedHeight(44)
+        btn_full.setFixedHeight(48)
         btn_full.setObjectName("menuToggleBtn")
         btn_full.clicked.connect(lambda: self._on_window_mode("fullscreen"))
         win_group.addButton(btn_full)
@@ -228,16 +264,98 @@ class MenuDialog(QDialog):
             btn = QPushButton(name)
             btn.setCheckable(True)
             btn.setChecked(name.lower() == current.lower())
-            btn.setFixedHeight(42)
+            btn.setFixedHeight(46)
             btn.setObjectName("menuToggleBtn")
             btn.clicked.connect(lambda _, n=name: self._on_culture(n))
             cult_group.addButton(btn)
             grid.addWidget(btn, i // 2, i % 2)
 
         bl.addLayout(grid)
-        bl.addStretch()
-        vbox.addWidget(body)
+
+        # ── Sensors ────────────────────────────────────────────────────────
+        bl.addWidget(self._section_label("Датчики"))
+
+        sensor_group = QFrame()
+        sensor_group.setObjectName("sensorSettingsGroup")
+        sg_layout = QVBoxLayout(sensor_group)
+        sg_layout.setContentsMargins(10, 10, 10, 10)
+        sg_layout.setSpacing(8)
+        sensors_list = self._config.sensors.get("list", {})
+        for sname, scfg in sensors_list.items():
+            sg_layout.addWidget(self._sensor_toggle_row(sname, scfg))
+        bl.addWidget(sensor_group)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setWidget(body)
+        vbox.addWidget(scroll, stretch=1)
         return page
+
+    def _sensor_toggle_row(self, name: str, cfg: dict) -> QWidget:
+        enabled = cfg.get("enabled", True)
+        show_in_panel = cfg.get("show_in_panel", True)
+        ru_name = _SENSOR_NAMES_RU.get(name, name)
+        is_impulse = cfg.get("type") == "impulse"
+
+        row_w = QWidget()
+        hl = QHBoxLayout(row_w)
+        hl.setContentsMargins(0, 0, 0, 0)
+        hl.setSpacing(6)
+
+        lbl = QLabel(ru_name)
+        lbl.setObjectName("menuSectionLabel")
+        lbl.setFixedWidth(110)
+        hl.addWidget(lbl)
+
+        hl.addStretch()
+
+        en_group = QButtonGroup(row_w)
+        en_group.setExclusive(True)
+
+        btn_on = QPushButton("Вкл")
+        btn_on.setCheckable(True)
+        btn_on.setChecked(enabled)
+        btn_on.setFixedSize(68, 38)
+        btn_on.setObjectName("menuToggleBtn")
+        btn_on.clicked.connect(lambda _, n=name: self._on_sensor_enabled(n, True))
+        en_group.addButton(btn_on)
+        hl.addWidget(btn_on)
+
+        btn_off = QPushButton("Выкл")
+        btn_off.setCheckable(True)
+        btn_off.setChecked(not enabled)
+        btn_off.setFixedSize(68, 38)
+        btn_off.setObjectName("menuToggleBtn")
+        btn_off.clicked.connect(lambda _, n=name: self._on_sensor_enabled(n, False))
+        en_group.addButton(btn_off)
+        hl.addWidget(btn_off)
+
+        if is_impulse:
+            hl.addSpacing(12)
+
+            pan_group = QButtonGroup(row_w)
+            pan_group.setExclusive(True)
+
+            btn_show = QPushButton("Справа")
+            btn_show.setCheckable(True)
+            btn_show.setChecked(show_in_panel)
+            btn_show.setFixedSize(76, 38)
+            btn_show.setObjectName("menuToggleBtn")
+            btn_show.clicked.connect(lambda _, n=name: self._on_sensor_panel(n, True))
+            pan_group.addButton(btn_show)
+            hl.addWidget(btn_show)
+
+            btn_hide = QPushButton("Скрыть")
+            btn_hide.setCheckable(True)
+            btn_hide.setChecked(not show_in_panel)
+            btn_hide.setFixedSize(76, 38)
+            btn_hide.setObjectName("menuToggleBtn")
+            btn_hide.clicked.connect(lambda _, n=name: self._on_sensor_panel(n, False))
+            pan_group.addButton(btn_hide)
+            hl.addWidget(btn_hide)
+
+        return row_w
 
     # ── Page 2: statistics ────────────────────────────────────────────────
 
@@ -405,6 +523,18 @@ class MenuDialog(QDialog):
     def _on_window_mode(self, mode: str):
         self._config.set_and_save("ui.window_mode", mode)
         self.window_mode_changed.emit(mode)
+
+    def _on_transparent(self, value: bool):
+        self._config.set_and_save("ui.transparent", value)
+        self.transparent_changed.emit(value)
+
+    def _on_sensor_enabled(self, name: str, enabled: bool):
+        self._config.set_and_save(f"sensors.list.{name}.enabled", enabled)
+        self.sensors_changed.emit()
+
+    def _on_sensor_panel(self, name: str, show: bool):
+        self._config.set_and_save(f"sensors.list.{name}.show_in_panel", show)
+        self.sensors_changed.emit()
 
     def _do_shutdown(self):
         self.accept()

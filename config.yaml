@@ -13,6 +13,8 @@ sensors:
       debounce_ms: 50
       description: Скорость вращения барабана
       units: об/мин
+      enabled: true
+      show_in_panel: true
     kolosa:
       gpio: 27
       type: impulse
@@ -24,6 +26,8 @@ sensors:
       debounce_ms: 50
       description: Скорость вращения колосового механизма
       units: об/мин
+      enabled: true
+      show_in_panel: true
     solomotryas:
       gpio: 24
       type: impulse
@@ -35,6 +39,8 @@ sensors:
       debounce_ms: 50
       description: Скорость вращения соломотряса
       units: об/мин
+      enabled: true
+      show_in_panel: false
     fan_speed:
       gpio: 23
       type: impulse
@@ -46,12 +52,16 @@ sensors:
       debounce_ms: 50
       description: Скорость вращения вентилятора
       units: об/мин
+      enabled: true
+      show_in_panel: true
     bin_level:
       gpio: 22
       type: discrete
       description: Уровень заполнения бункера
       units: статус
       debounce_ms: 100
+      enabled: true
+      show_in_panel: false
 unload_logic:
   bin_full_sensor: 22
   min_full_duration_ms: 1000
@@ -72,29 +82,33 @@ ui:
   orientation: horizontal
   fonts:
     title: 32
-    value: 28
+    value: 34
     label: 16
-    time: 24
+    time: 26
     menu: 18
   theme: light
   window_mode: windowed
   transparent: false
   colors_light:
-    background: '#FFFFFF'
-    text_primary: '#000000'
-    text_secondary: '#666666'
-    error_critical: '#E63946'
-    error_warning: '#F77F00'
-    border: '#CCCCCC'
-    menu_background: '#F5F5F5'
+    background: '#F4F6F8'
+    surface: '#FFFFFF'
+    text_primary: '#1A1A1A'
+    text_secondary: '#546E7A'
+    primary: '#1565C0'
+    error_critical: '#C62828'
+    error_warning: '#E65100'
+    border: '#D1D8E0'
+    menu_background: '#E8ECF0'
   colors_dark:
-    background: '#1E1E1E'
-    text_primary: '#FFFFFF'
-    text_secondary: '#AAAAAA'
-    error_critical: '#FF6B6B'
-    error_warning: '#FFB800'
-    border: '#333333'
-    menu_background: '#2A2A2A'
+    background: '#111318'
+    surface: '#1E2028'
+    text_primary: '#E8EAED'
+    text_secondary: '#8E9BB0'
+    primary: '#4FC3F7'
+    error_critical: '#EF5350'
+    error_warning: '#FFB300'
+    border: '#2F3340'
+    menu_background: '#252830'
 interface:
   display_sensors:
   - drum
