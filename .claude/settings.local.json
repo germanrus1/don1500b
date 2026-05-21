@@ -30,7 +30,9 @@
       "PowerShell(Get-Command gh -ErrorAction SilentlyContinue; \\(Get-Command gh -ErrorAction SilentlyContinue\\).Source; where.exe gh 2>$null)",
       "Bash(python scripts/office/unpack.py \"D:\\\\Projects\\\\Бортовой компьютер Дон 1500б\\\\app\\\\ROADMAP.docx\" /tmp/roadmap_unpacked/)",
       "Bash(ls /tmp/roadmap_unpacked/word/)",
-      "PowerShell(ls C:\\\\tmp\\\\roadmap_unpacked\\\\word\\\\ -ErrorAction SilentlyContinue; ls $env:TEMP\\\\roadmap_unpacked -ErrorAction SilentlyContinue)"
+      "PowerShell(ls C:\\\\tmp\\\\roadmap_unpacked\\\\word\\\\ -ErrorAction SilentlyContinue; ls $env:TEMP\\\\roadmap_unpacked -ErrorAction SilentlyContinue)",
+      "Bash(git merge feature/sensor-enable-ui-redesign --no-ff -m ' *)",
+      "Bash(git stash *)"
     ]
   }
 }
