@@ -23,10 +23,15 @@ def build_stylesheet(config: ConfigLoader, theme: str = "light") -> str:
     err_red = c.get("error_critical", "#C62828")
     err_warn= c.get("error_warning",  "#E65100")
 
-    f_value = f.get("value", 34)
-    f_label = f.get("label", 16)
-    f_time  = f.get("time",  26)
-    f_menu  = f.get("menu",  18)
+    _scale  = f.get("scale", 1.0)
+
+    def fs(n: int) -> int:
+        return round(n * _scale)
+
+    f_value = fs(f.get("value", 34))
+    f_label = fs(f.get("label", 16))
+    f_time  = fs(f.get("time",  26))
+    f_menu  = fs(f.get("menu",  18))
 
     # Alpha-blended accent colors for backgrounds/borders
     primary_btn_hover  = _rgba(primary, 22)   # hover bg on transparent elements
@@ -42,7 +47,7 @@ QMainWindow, QWidget {{
     background-color: {bg};
     color: {fg};
     font-family: "Roboto", "Ubuntu", "Segoe UI", sans-serif;
-    font-size: 15px;
+    font-size: {fs(15)}px;
 }}
 
 /* ── Top bar ────────────────────────────────────────────────── */
@@ -105,7 +110,7 @@ QFrame#sensorCard[errorState="critical"] {{
     border-radius: 14px;
 }}
 QLabel#sensorCardName {{
-    font-size: 13px;
+    font-size: {fs(13)}px;
     font-weight: 600;
     color: {fg2};
     background: transparent;
@@ -128,13 +133,13 @@ QFrame#errorDescBox {{
     border-radius: 12px;
 }}
 QLabel#errorDescTitle {{
-    font-size: 17px;
+    font-size: {fs(17)}px;
     font-weight: 700;
     color: #FFFFFF;
     background: transparent;
 }}
 QLabel#errorDescText {{
-    font-size: 14px;
+    font-size: {fs(14)}px;
     color: #DDDDDD;
     background: transparent;
 }}
@@ -142,7 +147,7 @@ QPushButton#errorDescClose {{
     background: transparent;
     color: #FFFFFF;
     border: none;
-    font-size: 20px;
+    font-size: {fs(20)}px;
     font-weight: 700;
 }}
 QPushButton#errorDescClose:hover {{ color: #EF9A9A; }}
@@ -161,7 +166,7 @@ QWidget#menuHeader {{
     border-radius: 0px;
 }}
 QLabel#menuPageTitle {{
-    font-size: 18px;
+    font-size: {fs(18)}px;
     font-weight: 700;
     color: {fg};
     background: transparent;
@@ -173,7 +178,7 @@ QPushButton#menuBackBtn {{
     color: {primary};
     border: 2px solid {primary_border_dim};
     border-radius: 10px;
-    font-size: 22px;
+    font-size: {fs(22)}px;
     font-weight: 700;
     padding: 0;
 }}
@@ -191,7 +196,7 @@ QPushButton#menuNavBtn {{
     color: {fg};
     border: 1px solid {border};
     border-radius: 12px;
-    font-size: 17px;
+    font-size: {fs(17)}px;
     font-weight: 600;
     text-align: center;
     padding: 0;
@@ -211,7 +216,7 @@ QPushButton#menuCloseBtn {{
     color: {fg2};
     border: 1px solid {border};
     border-radius: 10px;
-    font-size: 15px;
+    font-size: {fs(15)}px;
     font-weight: 600;
 }}
 QPushButton#menuCloseBtn:hover {{
@@ -221,7 +226,7 @@ QPushButton#menuCloseBtn:hover {{
 
 /* ── Section labels ──────────────────────────────────────────── */
 QLabel#menuSectionLabel {{
-    font-size: 12px;
+    font-size: {fs(12)}px;
     font-weight: 700;
     color: {fg2};
     background: transparent;
@@ -229,19 +234,19 @@ QLabel#menuSectionLabel {{
 
 /* ── Stat values ─────────────────────────────────────────────── */
 QLabel#menuStatValue {{
-    font-size: 22px;
+    font-size: {fs(22)}px;
     font-weight: 700;
     color: {fg};
     background: transparent;
 }}
 QLabel#menuTableHeader {{
-    font-size: 13px;
+    font-size: {fs(13)}px;
     font-weight: 700;
     color: {fg2};
     background: transparent;
 }}
 QLabel#menuTableRow {{
-    font-size: 13px;
+    font-size: {fs(13)}px;
     color: {fg};
     background: transparent;
 }}
@@ -252,7 +257,7 @@ QPushButton#menuToggleBtn {{
     color: {fg2};
     border: none;
     border-radius: 8px;
-    font-size: 14px;
+    font-size: {fs(14)}px;
     font-weight: 600;
     padding: 4px 8px;
 }}
@@ -271,7 +276,7 @@ QPushButton#menuDangerBtn {{
     color: #FFFFFF;
     border: none;
     border-radius: 12px;
-    font-size: 17px;
+    font-size: {fs(17)}px;
     font-weight: 700;
 }}
 QPushButton#menuDangerBtn:hover  {{ background-color: {danger_hover}; }}
@@ -290,7 +295,7 @@ QFrame#menuSep {{
     background-color: {border};
 }}
 
-/* ── Scrollbar — minimal ─────────────────────────────────────── */
+/* ── Scrollbar — touch-friendly ──────────────────────────────── */
 QScrollArea {{
     background: transparent;
     border: none;
@@ -299,14 +304,19 @@ QScrollArea > QWidget > QWidget {{
     background: transparent;
 }}
 QScrollBar:vertical {{
-    background: transparent;
-    width: 5px;
-    margin: 0;
+    background: {_rgba(border, 80)};
+    width: 14px;
+    margin: 2px;
+    border-radius: 7px;
 }}
 QScrollBar::handle:vertical {{
-    background: {border};
-    border-radius: 2px;
-    min-height: 32px;
+    background: {fg2};
+    border-radius: 5px;
+    min-height: 40px;
+    margin: 2px;
+}}
+QScrollBar::handle:vertical:hover {{
+    background: {primary};
 }}
 QScrollBar::add-line:vertical,
 QScrollBar::sub-line:vertical {{ height: 0; }}

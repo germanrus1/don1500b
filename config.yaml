@@ -62,6 +62,31 @@ sensors:
       debounce_ms: 100
       enabled: true
       show_in_panel: false
+stats:
+  bin_volume_m3: 6.0
+  session_timeout_min: 30
+  heartbeat_interval_sec: 60
+cultures:
+  Пшеница:
+    density: 0.77
+  Ячмень:
+    density: 0.63
+  Рапс:
+    density: 0.65
+  Подсолнечник:
+    density: 0.42
+  Кукуруза:
+    density: 0.73
+  Горох:
+    density: 0.78
+  Гречиха:
+    density: 0.63
+  Овёс:
+    density: 0.52
+  Фацелия:
+    density: 0.55
+  Эспарцет:
+    density: 0.6
 unload_logic:
   bin_full_sensor: 22
   min_full_duration_ms: 1000
@@ -86,8 +111,9 @@ ui:
     label: 16
     time: 26
     menu: 18
+    scale: 2.0
   theme: light
-  window_mode: windowed
+  window_mode: fullscreen
   transparent: false
   colors_light:
     background: '#F4F6F8'
@@ -130,6 +156,8 @@ interface:
   - Горох
   - Гречиха
   - Овёс
+  - Фацелия
+  - Эспарцет
   dialogs:
     show_shutdown_confirmation: true
 project_info:

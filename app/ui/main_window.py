@@ -41,20 +41,26 @@ _ICON_ROW_H = _ICON_SIZE + 8
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, config: ConfigLoader, logger: DataLogger):
+    def __init__(self, config: ConfigLoader, logger: DataLogger, collector=None):
         super().__init__()
         self._config = config
         self._logger = logger
+        self._collector = collector
         self._theme = config.ui.get("theme", "light")
         self._culture = config.interface.get("cultures", ["Пшеница"])[0]
         self._unload_count = 0
         self._work_start = datetime.now()
         self._prev_statuses: Dict[str, SensorStatus] = {}
 
-        flags = Qt.WindowType.FramelessWindowHint
-        if config.ui.get("transparent", False):
-            flags |= Qt.WindowType.WindowStaysOnTopHint
+        transparent = config.ui.get("transparent", False)
+        mode = config.ui.get("window_mode", "windowed")
+        if transparent:
+            flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
             self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        elif mode == "fullscreen":
+            flags = Qt.WindowType.FramelessWindowHint
+        else:
+            flags = Qt.WindowType.Window
         self.setWindowFlags(flags)
         self._setup_ui()
         self._apply_theme(self._theme)
@@ -396,21 +402,33 @@ class MainWindow(QMainWindow):
         )
 
     def _set_window_mode(self, mode: str):
+        transparent = self._config.ui.get("transparent", False)
+        if not transparent:
+            self.hide()
+            if mode == "fullscreen":
+                self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+            else:
+                self.setWindowFlags(Qt.WindowType.Window)
+            self.show()
         if mode == "fullscreen":
             self.showFullScreen()
         else:
             self.showNormal()
 
     def _set_transparent(self, transparent: bool):
-        flags = Qt.WindowType.FramelessWindowHint
+        mode = self._config.ui.get("window_mode", "windowed")
         if transparent:
-            flags |= Qt.WindowType.WindowStaysOnTopHint
+            flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
+        elif mode == "fullscreen":
+            flags = Qt.WindowType.FramelessWindowHint
+        else:
+            flags = Qt.WindowType.Window
         self.hide()
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, transparent)
         self.setWindowFlags(flags)   # forces native window recreation — required for transparency
         self._apply_theme(self._theme)
         self.show()
-        if self._config.ui.get("window_mode", "windowed") == "fullscreen":
+        if mode == "fullscreen":
             self.showFullScreen()
 
     def _apply_theme(self, theme: str):
@@ -430,10 +448,13 @@ class MainWindow(QMainWindow):
         }
         dialog = MenuDialog(
             self._config, stats, self._logger,
+            collector=self._collector,
             current_theme=self._theme, parent=self,
         )
         dialog.theme_changed.connect(self._apply_theme)
         dialog.culture_changed.connect(self._set_culture)
+        if self._collector is not None:
+            dialog.culture_changed.connect(self._collector.set_culture)
         dialog.window_mode_changed.connect(self._set_window_mode)
         dialog.transparent_changed.connect(self._set_transparent)
         dialog.sensors_changed.connect(self._rebuild_sensor_rows)

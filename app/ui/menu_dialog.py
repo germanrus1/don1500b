@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List
 
-from PyQt6.QtCore import Qt, QSize, pyqtSignal
+from PyQt6.QtCore import QEvent, Qt, QSize, pyqtSignal
 from PyQt6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QScroller,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -20,6 +21,7 @@ from PyQt6.QtWidgets import (
 from app.config.config_loader import ConfigLoader
 from app.logger.data_logger import DataLogger
 from app.ui.app_icons import icon as ui_icon
+from app.ui.statistics_screen import StatsPage
 from app.ui.styles import build_stylesheet
 
 
@@ -61,6 +63,7 @@ class MenuDialog(QDialog):
         config: ConfigLoader,
         stats: dict,
         logger: DataLogger,
+        collector=None,
         current_theme: str = "light",
         parent=None,
     ):
@@ -68,18 +71,29 @@ class MenuDialog(QDialog):
         self._config = config
         self._stats = stats           # {unload_count, culture, work_start}
         self._logger = logger
+        self._collector = collector
         self._theme = current_theme
 
         self.setModal(True)
-        self.setFixedSize(580, 500)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
-        if parent is not None:
-            pg = parent.geometry()
-            self.move(
-                pg.x() + (pg.width()  - 580) // 2,
-                pg.y() + (pg.height() - 500) // 2,
-            )
+        # Fit dialog to parent's screen — never overflow on small displays
+        screen = parent.screen() if parent is not None else None
+        if screen is None:
+            screen = QApplication.primaryScreen()
+        sg = screen.geometry() if screen is not None else None
+        dlg_w = min(580, sg.width()  - 20) if sg else 580
+        dlg_h = min(500, sg.height() - 40) if sg else 500
+        self.setFixedSize(dlg_w, dlg_h)
+
+        if parent is not None and sg is not None:
+            center = parent.mapToGlobal(parent.rect().center())
+            x = max(sg.x(), min(center.x() - dlg_w // 2, sg.x() + sg.width()  - dlg_w))
+            y = max(sg.y(), min(center.y() - dlg_h // 2, sg.y() + sg.height() - dlg_h))
+            self.move(x, y)
+
+        # Close when user taps outside the dialog
+        QApplication.instance().installEventFilter(self)
 
         root = QVBoxLayout(self)
         root.setContentsMargins(0, 0, 0, 0)
@@ -96,10 +110,30 @@ class MenuDialog(QDialog):
 
         self.setStyleSheet(build_stylesheet(config, current_theme))
 
+    # ── Outside-tap to close ───────────────────────────────────────────────
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.MouseButtonPress and self.isVisible():
+            if hasattr(event, "globalPosition"):
+                pos = event.globalPosition().toPoint()
+                if not self.geometry().contains(pos):
+                    self.reject()
+                    return True
+        return super().eventFilter(obj, event)
+
+    def done(self, result: int):
+        try:
+            QApplication.instance().removeEventFilter(self)
+        except Exception:
+            pass
+        super().done(result)
+
     # ── Navigation ─────────────────────────────────────────────────────────
 
     def _goto(self, idx: int):
         self._stack.setCurrentIndex(idx)
+        if idx == _PAGE_STATS and hasattr(self, "_stats_page"):
+            self._stats_page.refresh()
 
     def _icon_color(self) -> str:
         """Icon tint matching current theme (text primary color)."""
@@ -318,6 +352,7 @@ class MenuDialog(QDialog):
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setWidget(body)
+        QScroller.grabGesture(scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
         vbox.addWidget(scroll, stretch=1)
         return page
 
@@ -389,47 +424,28 @@ class MenuDialog(QDialog):
     # ── Page 2: statistics ────────────────────────────────────────────────
 
     def _page_stats(self) -> QWidget:
+        if self._collector is not None:
+            self._stats_page = StatsPage(
+                self._collector,
+                self._config,
+                back_fn=lambda: self._goto(_PAGE_MAIN),
+                parent=self,
+            )
+        else:
+            # Fallback when no collector available
+            self._stats_page = self._page_stats_fallback()
+        return self._stats_page
+
+    def _page_stats_fallback(self) -> QWidget:
         page = QWidget()
         vbox = QVBoxLayout(page)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
         vbox.addWidget(self._back_header("Статистика"))
-
-        body = QWidget()
-        bl = QVBoxLayout(body)
-        bl.setContentsMargins(28, 20, 28, 20)
-        bl.setSpacing(0)
-
-        work_start: datetime = self._stats.get("work_start", datetime.now())
-        elapsed = int((datetime.now() - work_start).total_seconds())
-        work_time = f"{elapsed // 3600:02d}:{(elapsed % 3600) // 60:02d}:{elapsed % 60:02d}"
-
-        rows = [
-            ("Разгрузок сегодня", str(self._stats.get("unload_count", 0))),
-            ("Время работы",      work_time),
-            ("Культура",          self._stats.get("culture", "—")),
-        ]
-
-        for label, value in rows:
-            row_w = QHBoxLayout()
-            lbl = QLabel(label)
-            lbl.setObjectName("menuSectionLabel")
-            val = QLabel(value)
-            val.setObjectName("menuStatValue")
-            row_w.addWidget(lbl)
-            row_w.addStretch()
-            row_w.addWidget(val)
-            bl.addLayout(row_w)
-            bl.addSpacing(8)
-
-            sep = QFrame()
-            sep.setObjectName("menuSep")
-            sep.setFixedHeight(1)
-            bl.addWidget(sep)
-            bl.addSpacing(16)
-
-        bl.addStretch()
-        vbox.addWidget(body, stretch=1)
+        lbl = QLabel("Статистика недоступна")
+        lbl.setObjectName("menuSectionLabel")
+        lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        vbox.addWidget(lbl, stretch=1)
         return page
 
     # ── Page 3: error history ─────────────────────────────────────────────
@@ -444,6 +460,7 @@ class MenuDialog(QDialog):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        QScroller.grabGesture(scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
 
         inner = QWidget()
         il = QVBoxLayout(inner)
