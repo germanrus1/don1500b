@@ -1,0 +1,6 @@
+module pages
+CropPage   1.0 CropPage.qml
+SensorPage 1.0 SensorPage.qml
+ThemePage  1.0 ThemePage.qml
+StatsPage  1.0 StatsPage.qml
+PowerPage  1.0 PowerPage.qml

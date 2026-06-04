@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import List, Optional
 
-from PyQt6.QtCore import QPoint, QPointF, Qt, QTimer, pyqtSignal
+from PyQt6.QtCore import QPoint, QPointF, QSize, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QIcon
 from PyQt6.QtGui import QBrush, QColor, QPainter, QPixmap
 from PyQt6.QtWidgets import (
     QButtonGroup,
@@ -267,6 +268,13 @@ class MenuDialog(QDialog):
         root.addWidget(self._stack, stretch=1)
 
     def _goto(self, idx: int):
+        if idx == _PAGE_STATS:
+            # Rebuild stats page fresh each time so data is current
+            old = self._stack.widget(_PAGE_STATS)
+            new = self._page_stats()
+            self._stack.removeWidget(old)
+            old.deleteLater()
+            self._stack.insertWidget(_PAGE_STATS, new)
         self._stack.setCurrentIndex(idx)
         self._title_lbl.setText(_TITLES.get(idx, ""))
         self._back_btn.setVisible(idx != _PAGE_ROOT)
@@ -347,7 +355,9 @@ class MenuDialog(QDialog):
         cvl.setSpacing(0)
 
         cultures = self._config.interface.get("cultures", _DEFAULT_CULTURES)
-        current  = self._stats.get("culture", "")
+
+        # Store button refs so we can update checkmarks in-place
+        self._crop_btns: dict = {}
 
         for i, name in enumerate(cultures):
             btn = QPushButton(name)
@@ -355,11 +365,12 @@ class MenuDialog(QDialog):
             btn.setFixedHeight(60)
             if i == 0:
                 btn.setStyleSheet("QPushButton#cropRow { border-top: none; }")
-            if name.lower() == current.lower():
-                btn.setProperty("selected", "true")
-                self._set_icon(btn, "mdi.check-circle")
-            btn.clicked.connect(lambda _, n=name, b=btn: self._on_crop(n, cultures))
+            self._crop_btns[name] = btn
+            btn.clicked.connect(lambda _, n=name: self._on_crop(n))
             cvl.addWidget(btn)
+
+        # Apply initial checkmark
+        self._apply_crop_checkmarks()
 
         bl.addWidget(card)
         bl.addStretch()
@@ -370,11 +381,30 @@ class MenuDialog(QDialog):
         pl.addWidget(scroll)
         return page
 
-    def _on_crop(self, name: str, cultures: list):
+    def _apply_crop_checkmarks(self):
+        current = self._stats.get("culture", "")
+        primary = self._tokens.get("primary", "#1f6feb")
+        fg      = self._tokens.get("text_primary", "#192230")
+        check_icon = qta.icon("mdi.check-circle", color=primary) if _HAS_QTA else QIcon()
+
+        for name, btn in self._crop_btns.items():
+            selected = name.lower() == current.lower()
+            if selected:
+                btn.setIcon(check_icon)
+                btn.setIconSize(QSize(22, 22))
+                btn.setStyleSheet(
+                    f"QPushButton#cropRow {{ color: {primary}; font-weight: 600; "
+                    f"border-top: 1px solid {self._tokens.get('border','#e1e6ee')}; }}"
+                )
+            else:
+                btn.setIcon(QIcon())
+                btn.setStyleSheet("")
+
+    def _on_crop(self, name: str):
         self._stats["culture"] = name
         self.culture_changed.emit(name)
-        # Refresh page to update checkmarks — rebuild next time it's shown
-        self._goto(_PAGE_ROOT)
+        # Update checkmarks in-place without leaving the page
+        self._apply_crop_checkmarks()
 
     # ── Page 2: sensors ────────────────────────────────────────────────────
 
@@ -692,22 +722,29 @@ class MenuDialog(QDialog):
         dcl.setContentsMargins(0, 0, 0, 0)
         dcl.setSpacing(0)
 
-        border = self._tokens.get("border", "#e1e6ee")
+        border  = self._tokens.get("border",     "#e1e6ee")
+        surface = self._tokens.get("surface",    "#ffffff")
+        bg      = self._tokens.get("background", "#eef1f5")
         rows = self._get_detail_rows(stats)
         for i, (key, val) in enumerate(rows):
             row_w = QWidget()
             rhl   = QHBoxLayout(row_w)
             rhl.setContentsMargins(18, 0, 18, 0)
             row_w.setFixedHeight(54)
-            if i > 0:
-                row_w.setStyleSheet(f"border-top: 1px solid {border};")
+            row_bg = bg if i % 2 == 1 else surface
+            top_border = f"border-top: 1px solid {border};" if i > 0 else ""
+            row_w.setStyleSheet(
+                f"background-color: {row_bg}; {top_border}"
+            )
 
             k_lbl = QLabel(key)
             k_lbl.setObjectName("detailKey")
+            k_lbl.setStyleSheet("background: transparent;")
             rhl.addWidget(k_lbl, stretch=1)
 
             v_lbl = QLabel(str(val))
             v_lbl.setObjectName("detailVal")
+            v_lbl.setStyleSheet("background: transparent;")
             rhl.addWidget(v_lbl)
             dcl.addWidget(row_w)
 
@@ -810,10 +847,11 @@ class MenuDialog(QDialog):
 
         confirm = QPushButton("  Выключить")
         confirm.setObjectName("dangerBtn")
-        confirm.setFixedSize(180, 56)
+        confirm.setFixedSize(200, 56)
         if _HAS_QTA:
             try:
                 confirm.setIcon(qta.icon("mdi.power", color="#ffffff"))
+                confirm.setIconSize(QSize(22, 22))
             except Exception:
                 pass
         confirm.clicked.connect(self._do_shutdown)

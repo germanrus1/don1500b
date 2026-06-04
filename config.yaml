@@ -66,6 +66,8 @@ sensors:
       enabled: true
     auger:
       enabled: true
+    erpm:
+      enabled: true
 stats:
   bin_volume_m3: 6.0
   session_timeout_min: 30
@@ -112,7 +114,7 @@ ui:
   fonts:
     scale: 1.0
   theme: light
-  window_mode: fullscreen
+  window_mode: windowed
   transparent: false
   colors_light:
     background: '#eef1f5'

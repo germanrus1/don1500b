@@ -405,19 +405,15 @@ class MainWindow(QMainWindow):
         self._speedometer = Speedometer()
         vl.addWidget(self._speedometer, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        # Status area: normal pill or fault strip
+        # Fault strip — only shown when there are active errors
         self._status_area = QWidget()
         self._status_area.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self._status_area.hide()
         self._status_hl   = QHBoxLayout(self._status_area)
         self._status_hl.setContentsMargins(0, 0, 0, 0)
         self._status_hl.setSpacing(26)
         self._status_hl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
         vl.addWidget(self._status_area, 0, Qt.AlignmentFlag.AlignHCenter)
-
-        self._normal_pill = QLabel("  ✓   Штатный режим · все системы в норме  ")
-        self._normal_pill.setObjectName("normalPill")
-        self._normal_pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._status_hl.addWidget(self._normal_pill)
 
         self._fault_widgets: List[QWidget] = []
         return panel
@@ -434,7 +430,7 @@ class MainWindow(QMainWindow):
 
         tokens  = get_tokens(self._config, self._theme)
         has_err = bool(faults)
-        self._normal_pill.setVisible(not has_err)
+        self._status_area.setVisible(has_err)
 
         for reading in faults:
             s_def = next((s for s in _ALL_SENSORS

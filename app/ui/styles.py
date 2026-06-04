@@ -173,17 +173,6 @@ QWidget#panelCenter {{
     background-color: {bg};
 }}
 
-/* ── Normal mode pill ───────────────────────────────────────────── */
-QLabel#normalPill {{
-    background-color: {_rgba("#22a05a", 30)};
-    color: #22a05a;
-    border: 1px solid {_rgba("#22a05a", 100)};
-    border-radius: 999px;
-    font-size: 16px;
-    font-weight: 600;
-    padding: 6px 20px;
-}}
-
 /* ── Fault icon buttons ─────────────────────────────────────────── */
 QPushButton#faultBtn {{
     background-color: transparent;
