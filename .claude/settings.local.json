@@ -32,7 +32,22 @@
       "Bash(ls /tmp/roadmap_unpacked/word/)",
       "PowerShell(ls C:\\\\tmp\\\\roadmap_unpacked\\\\word\\\\ -ErrorAction SilentlyContinue; ls $env:TEMP\\\\roadmap_unpacked -ErrorAction SilentlyContinue)",
       "Bash(git merge feature/sensor-enable-ui-redesign --no-ff -m ' *)",
-      "Bash(git stash *)"
+      "Bash(git stash *)",
+      "Bash(python -c \"import docx; print\\(docx.__version__\\)\")",
+      "Bash(python _update_roadmap.py)",
+      "Bash(rm _update_roadmap.py)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app/ui/menu_dialog.py', encoding='utf-8'\\).read\\(\\)\\); print\\('menu_dialog.py: OK'\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('app/ui/app_icons.py', encoding='utf-8'\\).read\\(\\)\\); print\\('app_icons.py: OK'\\)\")",
+      "Bash(del \"D:\\\\Projects\\\\Бортовой компьютер Дон 1500б\\\\app\\\\data\\\\statistics.db\")",
+      "Bash(del \"D:\\\\Projects\\\\Бортовой компьютер Дон 1500б\\\\app\\\\data\\\\statistics.db-wal\")",
+      "Bash(del \"D:\\\\Projects\\\\Бортовой компьютер Дон 1500б\\\\app\\\\data\\\\statistics.db-shm\")",
+      "WebFetch(domain:api.anthropic.com)",
+      "Bash(cp \"C:\\\\Users\\\\mrger\\\\.claude\\\\projects\\\\D--Projects------------------------1500--app\\\\98463638-89a8-4309-af8a-62eab98d71c1\\\\tool-results\\\\webfetch-1780565296789-uhcv4j.bin\" /tmp/design.gz)",
+      "Bash(gunzip -c /tmp/design.gz)",
+      "Read(//tmp/**)",
+      "Bash(mkdir -p /tmp/design_bundle)",
+      "Bash(tar -xf /tmp/design.gz -C /tmp/design_bundle)",
+      "Bash(python *)"
     ]
   }
 }

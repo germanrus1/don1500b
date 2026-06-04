@@ -1,16 +1,16 @@
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List, Optional
 
-from PyQt6.QtCore import Qt, QPropertyAnimation, QTimer, pyqtSlot
-from PyQt6.QtGui import QColor
+from PyQt6.QtCore import Qt, QPropertyAnimation, QTimer, pyqtSignal, pyqtSlot
+from PyQt6.QtGui import QBrush, QColor, QPainter, QPen, QPixmap
 from PyQt6.QtWidgets import (
     QFrame,
-    QGraphicsDropShadowEffect,
     QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QMainWindow,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -18,366 +18,533 @@ from PyQt6.QtWidgets import (
 from app.config.config_loader import ConfigLoader
 from app.logger.data_logger import DataLogger
 from app.sensors.sensor_base import SensorReading, SensorStatus
-from app.ui.error_dialog import ErrorDialog
-from app.ui.icons import sensor_icon, sensor_icon_badge
 from app.ui.menu_dialog import MenuDialog
-from app.ui.styles import build_stylesheet
+from app.ui.speedometer import Speedometer
+from app.ui.styles import build_stylesheet, get_tokens
+
+try:
+    import qtawesome as qta
+    _HAS_QTA = True
+except Exception:
+    _HAS_QTA = False
 
 
-_SENSOR_NAMES_RU = {
-    "drum":        "Барабан",
-    "kolosa":      "Колоса",
-    "fan_speed":   "Вентилятор",
-    "solomotryas": "Соломотряс",
-    "bin_level":   "Бункер",
+# ── Sensor display model ───────────────────────────────────────────────────
+
+_LEFT_SENSORS: List[dict] = [
+    {"id": "erpm",  "short": "Двигатель",     "full": "Обороты двигателя",                "unit": "об/мин", "mdi": "mdi.cog",              "color": "#7c5cf0"},
+    {"id": "etemp", "short": "Темп. двигат.", "full": "Температура охлаждающей жидкости", "unit": "°C",     "mdi": "mdi.thermometer",       "color": "#e85d3a"},
+    {"id": "oil",   "short": "Давл. масла",   "full": "Давление масла в двигателе",       "unit": "бар",    "mdi": "mdi.gauge",             "color": "#5b6ef0"},
+    {"id": "fuel",  "short": "Топливо",       "full": "Уровень топлива в баке",           "unit": "%",      "mdi": "mdi.gas-station",       "color": "#f0871a"},
+    {"id": "volt",  "short": "Бортсеть",      "full": "Напряжение бортовой сети",         "unit": "В",      "mdi": "mdi.lightning-bolt",    "color": "#e0930f"},
+]
+_RIGHT_SENSORS: List[dict] = [
+    {"id": "drum",  "short": "Барабан",       "full": "Частота молотильного барабана",    "unit": "об/мин", "mdi": "mdi.rotate-3d-variant", "color": "#3b82f6"},
+    {"id": "auger", "short": "Колос. шнек",  "full": "Обороты колосового шнека",         "unit": "об/мин", "mdi": "mdi.swap-horizontal",   "color": "#22a05a"},
+    {"id": "fan",   "short": "Вентилятор",    "full": "Вентилятор системы очистки",       "unit": "об/мин", "mdi": "mdi.fan",               "color": "#0ea5b5"},
+    {"id": "moist", "short": "Влажность",     "full": "Влажность зерна",                  "unit": "%",      "mdi": "mdi.water",             "color": "#14a08a"},
+    {"id": "loss",  "short": "Потери зерна",  "full": "Потери зерна за молотилкой",       "unit": "%",      "mdi": "mdi.grain",             "color": "#d6479b"},
+]
+_ALL_SENSORS = _LEFT_SENSORS + _RIGHT_SENSORS
+
+# Hardware sensor name → display ID
+_ALIAS: Dict[str, str] = {
+    "drum":      "drum",
+    "kolosa":    "auger",
+    "fan_speed": "fan",
 }
 
-_PANEL_ICON_SIZE = 36
-_RIGHT_PANEL_W    = 240
-_TOP_BAR_H        = 55
+_COL_W   = 232
+_TOP_H   = 55
+_COL_PAD = 12
+_CHIP_SZ = 46
+_ICON_SZ = 27
+_CHIP_R  = 11
 
-_ICON_SIZE  = 64
-_ICON_ROW_H = _ICON_SIZE + 8
 
+# ── Helpers ────────────────────────────────────────────────────────────────
+
+def _fmt(v: float) -> str:
+    return str(int(v)) if v == int(v) else f"{v:.1f}"
+
+
+def _chip_pixmap(mdi: str, color_hex: str, is_dark: bool) -> QPixmap:
+    color = QColor(color_hex)
+    alpha = int(255 * (0.22 if is_dark else 0.15))
+    bg    = QColor(color.red(), color.green(), color.blue(), alpha)
+
+    px = QPixmap(_CHIP_SZ, _CHIP_SZ)
+    px.fill(Qt.GlobalColor.transparent)
+    p = QPainter(px)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(bg))
+    p.drawRoundedRect(0, 0, _CHIP_SZ, _CHIP_SZ, _CHIP_R, _CHIP_R)
+    if _HAS_QTA:
+        try:
+            icon_px = qta.icon(mdi, color=color_hex).pixmap(_ICON_SZ, _ICON_SZ)
+            off = (_CHIP_SZ - _ICON_SZ) // 2
+            p.drawPixmap(off, off, icon_px)
+        except Exception:
+            pass
+    p.end()
+    return px
+
+
+def _fault_circle_pixmap(mdi: str, color_hex: str, size: int = 64) -> QPixmap:
+    color = QColor(color_hex)
+    px = QPixmap(size, size)
+    px.fill(Qt.GlobalColor.transparent)
+    p = QPainter(px)
+    p.setRenderHint(QPainter.RenderHint.Antialiasing)
+    p.setPen(Qt.PenStyle.NoPen)
+    p.setBrush(QBrush(color))
+    p.drawEllipse(0, 0, size, size)
+    if _HAS_QTA:
+        try:
+            icon_px = qta.icon(mdi, color="#ffffff").pixmap(34, 34)
+            off = (size - 34) // 2
+            p.drawPixmap(off, off, icon_px)
+        except Exception:
+            pass
+    p.end()
+    return px
+
+
+# ── Sensor card widget ─────────────────────────────────────────────────────
+
+class _SensorCard(QFrame):
+    tapped = pyqtSignal(str)  # full sensor name
+
+    def __init__(self, sensor: dict, tokens: dict, is_dark: bool, parent=None):
+        super().__init__(parent)
+        self._sensor  = sensor
+        self._tokens  = tokens
+        self._is_dark = is_dark
+        self._state   = ""
+        self.setObjectName("sensorCard")
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._build(tokens, is_dark)
+
+    def _build(self, tokens: dict, is_dark: bool):
+        hl = QHBoxLayout(self)
+        hl.setContentsMargins(_COL_PAD, 0, _COL_PAD, 0)
+        hl.setSpacing(12)
+
+        self._chip_lbl = QLabel()
+        self._chip_lbl.setFixedSize(_CHIP_SZ, _CHIP_SZ)
+        self._chip_lbl.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self._chip_lbl.setPixmap(_chip_pixmap(self._sensor["mdi"], self._sensor["color"], is_dark))
+        hl.addWidget(self._chip_lbl)
+
+        text_w = QWidget()
+        text_w.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        vl = QVBoxLayout(text_w)
+        vl.setContentsMargins(0, 0, 0, 0)
+        vl.setSpacing(1)
+        vl.setAlignment(Qt.AlignmentFlag.AlignVCenter)
+
+        self._name_lbl = QLabel(self._sensor["short"])
+        self._name_lbl.setObjectName("cardName")
+        vl.addWidget(self._name_lbl)
+
+        val_row = QWidget()
+        val_row.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        vr = QHBoxLayout(val_row)
+        vr.setContentsMargins(0, 0, 0, 0)
+        vr.setSpacing(5)
+        vr.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+
+        self._val_lbl  = QLabel("—")
+        self._val_lbl.setObjectName("cardValue")
+        vr.addWidget(self._val_lbl)
+
+        self._unit_lbl = QLabel(self._sensor["unit"])
+        self._unit_lbl.setObjectName("cardUnit")
+        self._unit_lbl.setAlignment(Qt.AlignmentFlag.AlignBottom)
+        vr.addWidget(self._unit_lbl)
+        vr.addStretch()
+
+        vl.addWidget(val_row)
+        hl.addWidget(text_w, stretch=1)
+
+    def mousePressEvent(self, event):
+        self.tapped.emit(self._sensor["full"])
+        super().mousePressEvent(event)
+
+    def update_value(self, value: Optional[float], state: str, tokens: dict):
+        self._state  = state
+        self._tokens = tokens
+        crit = tokens.get("error_critical", "#d92d20")
+        warn = tokens.get("error_warning",  "#e8830c")
+        fg   = tokens.get("text_primary",   "#192230")
+
+        display = _fmt(value) if value is not None else "—"
+        self._val_lbl.setText(display)
+
+        if state == "critical":
+            val_color   = crit
+            card_border = f"2px solid {crit}"
+        elif state == "warning":
+            val_color   = warn
+            card_border = f"2px solid {warn}"
+        else:
+            val_color   = fg
+            card_border = f"1px solid {tokens.get('border', '#e1e6ee')}"
+
+        surface = tokens.get("surface", "#ffffff")
+        self.setStyleSheet(
+            f"QFrame#sensorCard {{ background-color: {surface}; border: {card_border}; border-radius: 16px; }}"
+        )
+        self._val_lbl.setStyleSheet(
+            f"font-family: 'IBM Plex Mono', 'Courier New', monospace; "
+            f"font-size: 31px; font-weight: 700; color: {val_color}; background: transparent;"
+        )
+
+
+# ── Main window ────────────────────────────────────────────────────────────
 
 class MainWindow(QMainWindow):
     def __init__(self, config: ConfigLoader, logger: DataLogger, collector=None):
         super().__init__()
-        self._config = config
-        self._logger = logger
-        self._collector = collector
-        self._theme = config.ui.get("theme", "light")
-        self._culture = config.interface.get("cultures", ["Пшеница"])[0]
+        self._config       = config
+        self._logger       = logger
+        self._collector    = collector
+        self._theme        = config.ui.get("theme", "light")
+        self._culture      = config.interface.get("cultures", ["Пшеница"])[0]
         self._unload_count = 0
-        self._work_start = datetime.now()
-        self._prev_statuses: Dict[str, SensorStatus] = {}
+        self._work_start   = datetime.now()
+        self._speed        = 0.0
+        self._cards: Dict[str, _SensorCard] = {}
+        self._prev_readings: Dict[str, SensorReading] = {}
 
-        transparent = config.ui.get("transparent", False)
         mode = config.ui.get("window_mode", "windowed")
-        if transparent:
-            flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
-            self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-        elif mode == "fullscreen":
-            flags = Qt.WindowType.FramelessWindowHint
-        else:
-            flags = Qt.WindowType.Window
+        flags = Qt.WindowType.FramelessWindowHint if mode == "fullscreen" else Qt.WindowType.Window
         self.setWindowFlags(flags)
         self._setup_ui()
         self._apply_theme(self._theme)
         self._start_clock()
 
-    # ── UI construction ────────────────────────────────────────────────────
+    # ── Build UI ───────────────────────────────────────────────────────────
 
     def _setup_ui(self):
-        res = self._config.ui.get("resolution", {})
-        w, h = res.get("width", 1200), res.get("height", 600)
+        res  = self._config.ui.get("resolution", {})
+        w, h = res.get("width", 1024), res.get("height", 600)
         self.setFixedSize(w, h)
         self.setWindowTitle("Дон 1500б")
 
-        root = QWidget()
-        root.setObjectName("centralWidget")
-        self.setCentralWidget(root)
-        vbox = QVBoxLayout(root)
-        vbox.setContentsMargins(0, 0, 0, 0)
-        vbox.setSpacing(0)
+        central = QWidget()
+        central.setObjectName("centralWidget")
+        self.setCentralWidget(central)
 
-        vbox.addWidget(self._build_top_bar())
+        root = QVBoxLayout(central)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        root.addWidget(self._build_top_bar())
 
         body = QWidget()
-        hbox = QHBoxLayout(body)
-        hbox.setContentsMargins(0, 0, 0, 0)
-        hbox.setSpacing(0)
-        hbox.addWidget(self._build_center_panel(), stretch=1)
-        hbox.addWidget(self._build_right_panel())
-        vbox.addWidget(body, stretch=1)
+        body_hl = QHBoxLayout(body)
+        body_hl.setContentsMargins(0, 0, 0, 0)
+        body_hl.setSpacing(0)
+
+        self._left_col_w = self._build_sensor_column(_LEFT_SENSORS, "left")
+        body_hl.addWidget(self._left_col_w)
+
+        div_l = QFrame()
+        div_l.setObjectName("divider")
+        div_l.setFixedWidth(1)
+        body_hl.addWidget(div_l)
+
+        body_hl.addWidget(self._build_center_panel(), stretch=1)
+
+        div_r = QFrame()
+        div_r.setObjectName("divider")
+        div_r.setFixedWidth(1)
+        body_hl.addWidget(div_r)
+
+        self._right_col_w = self._build_sensor_column(_RIGHT_SENSORS, "right")
+        body_hl.addWidget(self._right_col_w)
+
+        root.addWidget(body, stretch=1)
+
+        # Floating toast overlay on central widget
+        self._toast_lbl = QLabel(central)
+        self._toast_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._toast_lbl.setStyleSheet(
+            "background-color: #1c1e24; color: #ffffff; border-radius: 10px;"
+            "font-size: 14px; font-weight: 600; padding: 9px 14px;"
+        )
+        self._toast_lbl.hide()
+
+        self._toast_effect = QGraphicsOpacityEffect()
+        self._toast_lbl.setGraphicsEffect(self._toast_effect)
+        self._toast_anim_in  = QPropertyAnimation(self._toast_effect, b"opacity")
+        self._toast_anim_in.setDuration(160)
+        self._toast_anim_in.setStartValue(0.0)
+        self._toast_anim_in.setEndValue(1.0)
+        self._toast_anim_out = QPropertyAnimation(self._toast_effect, b"opacity")
+        self._toast_anim_out.setDuration(400)
+        self._toast_anim_out.setStartValue(1.0)
+        self._toast_anim_out.setEndValue(0.0)
+        self._toast_anim_out.finished.connect(self._toast_lbl.hide)
+        self._toast_timer = QTimer(self)
+        self._toast_timer.setSingleShot(True)
+        self._toast_timer.timeout.connect(self._toast_anim_out.start)
 
     def _build_top_bar(self) -> QWidget:
         bar = QWidget()
         bar.setObjectName("topBar")
-        bar.setFixedHeight(55)
+        bar.setFixedHeight(_TOP_H)
 
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(16, 8, 16, 8)
+        hl = QHBoxLayout(bar)
+        hl.setContentsMargins(14, 0, 14, 0)
+        hl.setSpacing(0)
 
-        self._btn_menu = QPushButton("МЕНЮ")
+        # Left: МЕНЮ pill
+        self._btn_menu = QPushButton("  Меню")
         self._btn_menu.setObjectName("btnMenu")
-        self._btn_menu.setFixedSize(120, 42)
+        self._btn_menu.setFixedSize(130, 42)
         self._btn_menu.clicked.connect(self._open_menu)
-        layout.addWidget(self._btn_menu)
+        if _HAS_QTA:
+            try:
+                self._btn_menu.setIcon(qta.icon("mdi.menu", color="#ffffff"))
+            except Exception:
+                pass
+        hl.addWidget(self._btn_menu, 0, Qt.AlignmentFlag.AlignVCenter)
+        hl.addStretch(1)
 
-        layout.addStretch()
-
-        # Center group: time + culture — kept together and centered as a unit
-        center_w = QWidget()
-        center_row = QHBoxLayout(center_w)
-        center_row.setContentsMargins(0, 0, 0, 0)
-        center_row.setSpacing(0)
-
+        # Center: clock
         self._lbl_time = QLabel()
         self._lbl_time.setObjectName("labelTime")
-        self._lbl_time.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-        center_row.addWidget(self._lbl_time)
+        self._lbl_time.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        hl.addWidget(self._lbl_time, 0, Qt.AlignmentFlag.AlignVCenter)
+        hl.addStretch(1)
 
-        center_row.addSpacing(18)
+        # Right: culture name + chip
+        crop_w = QWidget()
+        crop_hl = QHBoxLayout(crop_w)
+        crop_hl.setContentsMargins(0, 0, 0, 0)
+        crop_hl.setSpacing(9)
+
+        name_col = QWidget()
+        name_vl  = QVBoxLayout(name_col)
+        name_vl.setContentsMargins(0, 0, 0, 0)
+        name_vl.setSpacing(1)
+
+        caption = QLabel("КУЛЬТУРА")
+        caption.setObjectName("labelCropCaption")
+        caption.setAlignment(Qt.AlignmentFlag.AlignRight)
+        name_vl.addWidget(caption)
 
         self._lbl_culture = QLabel(self._culture)
-        self._lbl_culture.setObjectName("labelCulture")
-        self._lbl_culture.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
-        center_row.addWidget(self._lbl_culture)
+        self._lbl_culture.setObjectName("labelCropName")
+        self._lbl_culture.setAlignment(Qt.AlignmentFlag.AlignRight)
+        name_vl.addWidget(self._lbl_culture)
 
-        layout.addWidget(center_w)
-        layout.addStretch()
+        crop_hl.addWidget(name_col)
 
-        spacer = QWidget()
-        spacer.setFixedWidth(120)
-        layout.addWidget(spacer)
+        chip = QLabel()
+        chip.setFixedSize(34, 34)
+        chip.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        chip.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        chip.setPixmap(self._crop_chip_pixmap())
+        self._crop_chip = chip
+        crop_hl.addWidget(chip)
 
+        hl.addWidget(crop_w, 0, Qt.AlignmentFlag.AlignVCenter)
         return bar
 
+    def _crop_chip_pixmap(self) -> QPixmap:
+        size = 34
+        px   = QPixmap(size, size)
+        px.fill(Qt.GlobalColor.transparent)
+        p = QPainter(px)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setPen(Qt.PenStyle.NoPen)
+        bg = QColor(0x22, 0xa0, 0x5a, 40)
+        p.setBrush(QBrush(bg))
+        p.drawRoundedRect(0, 0, size, size, 10, 10)
+        if _HAS_QTA:
+            try:
+                icon_px = qta.icon("mdi.leaf", color="#22a05a").pixmap(22, 22)
+                p.drawPixmap((size - 22) // 2, (size - 22) // 2, icon_px)
+            except Exception:
+                pass
+        p.end()
+        return px
+
+    def _build_sensor_column(self, sensors: List[dict], side: str) -> QWidget:
+        col = QWidget()
+        col.setObjectName("sensorColumn")
+        col.setFixedWidth(_COL_W)
+
+        vl = QVBoxLayout(col)
+        vl.setContentsMargins(_COL_PAD, _COL_PAD, _COL_PAD, _COL_PAD)
+        vl.setSpacing(10)
+
+        tokens  = get_tokens(self._config, self._theme)
+        is_dark = self._theme == "dark"
+
+        for s in sensors:
+            card = _SensorCard(s, tokens, is_dark, parent=col)
+            card.tapped.connect(lambda name, c=card: self._show_toast(name, c, side))
+            vl.addWidget(card, stretch=1)
+            self._cards[s["id"]] = card
+
+        return col
+
     def _build_center_panel(self) -> QWidget:
-        panel = QFrame()
+        panel = QWidget()
         panel.setObjectName("panelCenter")
 
-        # Absolutely positioned icon strip — geometry updated in resizeEvent
-        self._icons_container = QWidget(panel)
-        self._icons_container.setGeometry(0, 0, 0, _ICON_ROW_H)
-        self._icons_container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
+        vl = QVBoxLayout(panel)
+        vl.setContentsMargins(18, 14, 18, 14)
+        vl.setSpacing(22)
+        vl.setAlignment(Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter)
 
-        icons_row = QHBoxLayout(self._icons_container)
-        icons_row.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icons_row.setSpacing(20)
-        icons_row.setContentsMargins(0, 0, 0, 0)
-        self._icons_layout = icons_row
+        self._speedometer = Speedometer()
+        vl.addWidget(self._speedometer, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self._icons_container.setVisible(False)
+        # Status area: normal pill or fault strip
+        self._status_area = QWidget()
+        self._status_area.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self._status_hl   = QHBoxLayout(self._status_area)
+        self._status_hl.setContentsMargins(0, 0, 0, 0)
+        self._status_hl.setSpacing(26)
+        self._status_hl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        vl.addWidget(self._status_area, 0, Qt.AlignmentFlag.AlignHCenter)
+
+        self._normal_pill = QLabel("  ✓   Штатный режим · все системы в норме  ")
+        self._normal_pill.setObjectName("normalPill")
+        self._normal_pill.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._status_hl.addWidget(self._normal_pill)
+
+        self._fault_widgets: List[QWidget] = []
         return panel
 
-    def _build_right_panel(self) -> QWidget:
-        panel = QFrame()
-        panel.setObjectName("panelRight")
-        panel.setFixedWidth(_RIGHT_PANEL_W)
+    # ── Fault strip ────────────────────────────────────────────────────────
 
-        vbox = QVBoxLayout(panel)
-        vbox.setContentsMargins(14, 16, 14, 16)
-        vbox.setSpacing(10)
-        self._right_vbox = vbox
+    def _refresh_fault_strip(self, faults: List[SensorReading]):
+        # Remove previous fault buttons
+        for fw in self._fault_widgets:
+            fw.hide()
+            self._status_hl.removeWidget(fw)
+            fw.deleteLater()
+        self._fault_widgets.clear()
 
-        # Floating sensor-name toast — absolutely positioned, created once
-        self._sensor_toast = QLabel(panel)
-        self._sensor_toast.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._sensor_toast.setGeometry(16, 0, _RIGHT_PANEL_W - 32, 44)
-        self._sensor_toast.setStyleSheet(
-            "background-color: #2D2D2D; color: #FFFFFF;"
-            "border-radius: 10px; font-size: 16px; font-weight: bold;"
-        )
-        self._sensor_toast.hide()
+        tokens  = get_tokens(self._config, self._theme)
+        has_err = bool(faults)
+        self._normal_pill.setVisible(not has_err)
 
-        self._toast_effect = QGraphicsOpacityEffect()
-        self._sensor_toast.setGraphicsEffect(self._toast_effect)
+        for reading in faults:
+            s_def = next((s for s in _ALL_SENSORS
+                          if s["id"] == _ALIAS.get(reading.name, reading.name)), None)
+            if s_def is None:
+                continue
 
-        self._toast_in = QPropertyAnimation(self._toast_effect, b"opacity")
-        self._toast_in.setDuration(180)
-        self._toast_in.setStartValue(0.0)
-        self._toast_in.setEndValue(1.0)
+            is_crit = reading.status == SensorStatus.CRITICAL
+            color   = tokens["error_critical"] if is_crit else tokens["error_warning"]
+            px      = _fault_circle_pixmap(s_def["mdi"], color)
 
-        self._toast_out = QPropertyAnimation(self._toast_effect, b"opacity")
-        self._toast_out.setDuration(400)
-        self._toast_out.setStartValue(1.0)
-        self._toast_out.setEndValue(0.0)
-        self._toast_out.finished.connect(self._sensor_toast.hide)
+            container = QWidget()
+            container.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+            cvl = QVBoxLayout(container)
+            cvl.setContentsMargins(0, 0, 0, 0)
+            cvl.setSpacing(7)
+            cvl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
-        self._toast_timer = QTimer(self)
-        self._toast_timer.setSingleShot(True)
-        self._toast_timer.timeout.connect(self._toast_out.start)
+            icon_lbl = QLabel()
+            icon_lbl.setFixedSize(64, 64)
+            icon_lbl.setPixmap(px)
+            icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+            icon_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
+            icon_lbl.mousePressEvent = (
+                lambda _e, r=reading, c=color: self._open_error_dialog(r, c)
+            )
+            cvl.addWidget(icon_lbl, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self._sensor_value_labels: Dict[str, QLabel] = {}
-        self._rebuild_sensor_rows()
+            cap_lbl = QLabel(s_def["short"])
+            cap_lbl.setObjectName("cardName")
+            cap_lbl.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+            cvl.addWidget(cap_lbl, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        return panel
+            self._status_hl.addWidget(container)
+            self._fault_widgets.append(container)
 
-    def _get_panel_sensors(self) -> list:
-        sensors_list = self._config.sensors.get("list", {})
-        return [
-            (name, cfg)
-            for name, cfg in sensors_list.items()
-            if cfg.get("enabled", True) and cfg.get("show_in_panel", True)
-        ]
+    # ── Toast ──────────────────────────────────────────────────────────────
 
-    def _rebuild_sensor_rows(self):
-        while self._right_vbox.count():
-            item = self._right_vbox.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
-        self._sensor_value_labels: Dict[str, QLabel] = {}
-        self._sensor_cards: Dict[str, QFrame] = {}
-        self._prev_card_states: Dict[str, str] = {}
-
-        key = "colors_dark" if self._theme == "dark" else "colors_light"
-        c = self._config.ui.get(key, {})
-        icon_color = QColor(c.get("primary", "#1565C0"))
-
-        for name, _cfg in self._get_panel_sensors():
-            card = QFrame()
-            card.setObjectName("sensorCard")
-            card.setCursor(Qt.CursorShape.PointingHandCursor)
-            card.mousePressEvent = lambda _e, n=name, cd=card: self._show_sensor_toast(n, cd)
-
-            shadow = QGraphicsDropShadowEffect()
-            shadow.setBlurRadius(14)
-            shadow.setOffset(0, 3)
-            shadow.setColor(QColor(0, 0, 0, 28))
-            card.setGraphicsEffect(shadow)
-
-            card_layout = QVBoxLayout(card)
-            card_layout.setContentsMargins(12, 10, 12, 10)
-            card_layout.setSpacing(4)
-
-            name_lbl = QLabel(_SENSOR_NAMES_RU.get(name, name))
-            name_lbl.setObjectName("sensorCardName")
-            card_layout.addWidget(name_lbl)
-
-            val_row = QHBoxLayout()
-            val_row.setContentsMargins(0, 0, 0, 0)
-            val_row.setSpacing(6)
-
-            lbl_value = QLabel("—")
-            lbl_value.setObjectName("sensorValue")
-            lbl_value.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-            val_row.addWidget(lbl_value, stretch=1)
-
-            lbl_icon = QLabel()
-            lbl_icon.setPixmap(sensor_icon(name, icon_color, _PANEL_ICON_SIZE))
-            lbl_icon.setFixedSize(_PANEL_ICON_SIZE + 4, _PANEL_ICON_SIZE + 4)
-            lbl_icon.setAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight)
-            lbl_icon.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-            val_row.addWidget(lbl_icon)
-
-            card_layout.addLayout(val_row)
-
-            self._right_vbox.addWidget(card)
-            self._sensor_value_labels[name] = lbl_value
-            self._sensor_cards[name] = card
-
-        self._right_vbox.addStretch()
-
-    def _card_stylesheet(self, state: str) -> str:
-        key = "colors_dark" if self._theme == "dark" else "colors_light"
-        c = self._config.ui.get(key, {})
-        surface  = c.get("surface",        "#FFFFFF")
-        border   = c.get("border",         "#D1D8E0")
-        err_red  = c.get("error_critical", "#C62828")
-        err_warn = c.get("error_warning",  "#E65100")
-        if state == "critical":
-            return (f"QFrame#sensorCard {{ background-color: {surface}; "
-                    f"border: 2px solid {err_red}; border-radius: 14px; }}")
-        if state == "warning":
-            return (f"QFrame#sensorCard {{ background-color: {surface}; "
-                    f"border: 2px solid {err_warn}; border-radius: 14px; }}")
-        return (f"QFrame#sensorCard {{ background-color: {surface}; "
-                f"border: 1px solid {border}; border-radius: 14px; }}")
-
-    def _show_sensor_toast(self, name: str, row_widget: QWidget):
+    def _show_toast(self, full_name: str, card: _SensorCard, side: str):
         self._toast_timer.stop()
-        self._toast_out.stop()
+        self._toast_anim_out.stop()
 
-        panel = self._sensor_toast.parent()
-        toast_h = 44
-        toast_w = panel.width() - 32
-        row_top = row_widget.mapTo(panel, row_widget.rect().topLeft()).y()
-        y = row_top - toast_h - 6
-        if y < 4:
-            y = row_top + row_widget.height() + 6
-        self._sensor_toast.setGeometry(16, y, toast_w, toast_h)
+        self._toast_lbl.setText(full_name)
+        self._toast_lbl.adjustSize()
 
-        self._sensor_toast.setText(_SENSOR_NAMES_RU.get(name, name))
-        self._sensor_toast.show()
-        self._sensor_toast.raise_()
-        self._toast_in.stop()
-        self._toast_in.start()
-        self._toast_timer.start(1800)
+        # Position: center y of card, between column and center panel
+        card_center_y = card.mapTo(self.centralWidget(), card.rect().center()).y()
+        tw = max(self._toast_lbl.sizeHint().width() + 28, 200)
+        th = 38
+
+        if side == "left":
+            x = _COL_W + 8
+        else:
+            x = self.width() - _COL_W - 8 - tw
+
+        self._toast_lbl.setGeometry(x, card_center_y - th // 2, tw, th)
+        self._toast_lbl.show()
+        self._toast_lbl.raise_()
+        self._toast_anim_in.stop()
+        self._toast_anim_in.start()
+        self._toast_timer.start(2200)
 
     # ── Clock ──────────────────────────────────────────────────────────────
 
     def _start_clock(self):
-        timer = QTimer(self)
-        timer.timeout.connect(self._tick_clock)
-        timer.start(1000)
+        t = QTimer(self)
+        t.timeout.connect(self._tick_clock)
+        t.start(1000)
         self._tick_clock()
 
     def _tick_clock(self):
         fmt = self._config.interface.get("time_format", "%H:%M:%S")
         self._lbl_time.setText(datetime.now().strftime(fmt))
 
-    # ── Slots ──────────────────────────────────────────────────────────────
+    # ── Sensor updates ─────────────────────────────────────────────────────
 
     @pyqtSlot(dict)
     def update_sensors(self, readings: Dict[str, SensorReading]):
-        for name, lbl in self._sensor_value_labels.items():
-            r = readings.get(name)
-            lbl.setText(f"{int(r.value)}" if r else "—")
+        tokens  = get_tokens(self._config, self._theme)
+        faults: List[SensorReading] = []
 
-            card = self._sensor_cards.get(name)
-            if card and r:
-                new_state = (
-                    "critical" if r.status == SensorStatus.CRITICAL
-                    else "warning" if r.has_error
+        for hw_name, reading in readings.items():
+            display_id = _ALIAS.get(hw_name)
+            if display_id and display_id in self._cards:
+                state = (
+                    "critical" if reading.status == SensorStatus.CRITICAL
+                    else "warning" if reading.has_error
                     else ""
                 )
-                if self._prev_card_states.get(name) != new_state:
-                    card.setStyleSheet(self._card_stylesheet(new_state))
-                    self._prev_card_states[name] = new_state
+                self._cards[display_id].update_value(reading.value, state, tokens)
 
-        errors = [r for r in readings.values() if r.has_error]
-        self._refresh_error_icons(errors)
+            if reading.has_error:
+                faults.append(reading)
 
-        for name, reading in readings.items():
-            prev = self._prev_statuses.get(name)
-            if prev != reading.status:
-                self._logger.log_reading(name, reading.value, reading.unit, reading.status.value)
-                self._prev_statuses[name] = reading.status
+            prev = self._prev_readings.get(hw_name)
+            if prev is None or prev.status != reading.status:
+                self._logger.log_reading(hw_name, reading.value, reading.unit, reading.status.value)
+            self._prev_readings[hw_name] = reading
+
+        self._refresh_fault_strip(faults)
 
     @pyqtSlot(int)
     def on_unload(self, count: int):
         self._unload_count = count
         self._logger.log_unload(count, self._culture)
 
-    # ── Error icons ────────────────────────────────────────────────────────
-
-    def _refresh_error_icons(self, errors: list):
-        while self._icons_layout.count():
-            w = self._icons_layout.takeAt(0).widget()
-            if w:
-                w.deleteLater()
-
-        self._icons_container.setVisible(bool(errors))
-        if not errors:
-            return
-
-        c = self._config.ui.get(
-            "colors_dark" if self._theme == "dark" else "colors_light", {}
-        )
-
-        for reading in errors:
-            is_crit = reading.status == SensorStatus.CRITICAL
-            color_hex = c.get(
-                "error_critical" if is_crit else "error_warning",
-                "#E63946" if is_crit else "#F77F00",
-            )
-
-            icon_lbl = QLabel()
-            icon_lbl.setPixmap(sensor_icon_badge(reading.name, QColor(color_hex), _ICON_SIZE))
-            icon_lbl.setFixedSize(_ICON_SIZE + 4, _ICON_SIZE + 4)
-            icon_lbl.setCursor(Qt.CursorShape.PointingHandCursor)
-            icon_lbl.setToolTip(_SENSOR_NAMES_RU.get(reading.name, reading.name))
-            icon_lbl.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, True)
-            icon_lbl.mousePressEvent = (
-                lambda _e, r=reading, col=color_hex: self._open_error_dialog(r, col)
-            )
-
-            self._icons_layout.addWidget(icon_lbl)
+    # ── Error popup ────────────────────────────────────────────────────────
 
     def _open_error_dialog(self, reading: SensorReading, color: str):
+        from app.ui.error_dialog import ErrorDialog
         dlg = ErrorDialog(reading, color, self._config, parent=self)
         dlg.exec()
 
@@ -385,56 +552,43 @@ class MainWindow(QMainWindow):
 
     def showEvent(self, event):
         super().showEvent(event)
-        if not getattr(self, "_initial_mode_applied", False):
-            self._initial_mode_applied = True
+        if not getattr(self, "_init_mode_done", False):
+            self._init_mode_done = True
             if self._config.ui.get("window_mode", "windowed") == "fullscreen":
                 self.showFullScreen()
 
-    def resizeEvent(self, event):
-        super().resizeEvent(event)
-        if not hasattr(self, "_icons_container"):
-            return
-        pw = self.width() - _RIGHT_PANEL_W
-        ph = self.height() - _TOP_BAR_H
-        bottom_pad = max(12, int(ph * 0.035))
-        self._icons_container.setGeometry(
-            0, ph - _ICON_ROW_H - bottom_pad, pw, _ICON_ROW_H
-        )
-
     def _set_window_mode(self, mode: str):
-        transparent = self._config.ui.get("transparent", False)
-        if not transparent:
-            self.hide()
-            if mode == "fullscreen":
-                self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
-            else:
-                self.setWindowFlags(Qt.WindowType.Window)
-            self.show()
+        self.hide()
+        flags = (Qt.WindowType.FramelessWindowHint
+                 if mode == "fullscreen" else Qt.WindowType.Window)
+        self.setWindowFlags(flags)
+        self.show()
         if mode == "fullscreen":
             self.showFullScreen()
         else:
             self.showNormal()
 
-    def _set_transparent(self, transparent: bool):
-        mode = self._config.ui.get("window_mode", "windowed")
-        if transparent:
-            flags = Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint
-        elif mode == "fullscreen":
-            flags = Qt.WindowType.FramelessWindowHint
-        else:
-            flags = Qt.WindowType.Window
-        self.hide()
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground, transparent)
-        self.setWindowFlags(flags)   # forces native window recreation — required for transparency
-        self._apply_theme(self._theme)
-        self.show()
-        if mode == "fullscreen":
-            self.showFullScreen()
-
     def _apply_theme(self, theme: str):
         self._theme = theme
         self.setStyleSheet(build_stylesheet(self._config, theme))
-        self._rebuild_sensor_rows()
+
+        tokens  = get_tokens(self._config, theme)
+        is_dark = theme == "dark"
+
+        self._speedometer.apply_tokens(tokens)
+
+        # Update chip pixmaps and base card appearance for all sensor cards
+        for card in self._cards.values():
+            card._chip_lbl.setPixmap(
+                _chip_pixmap(card._sensor["mdi"], card._sensor["color"], is_dark)
+            )
+            # Reset to default state; will be re-colored by update_sensors below
+            card._state = ""
+            card.setStyleSheet("")
+
+        # Re-apply last known values so value colors and borders are correct
+        if self._prev_readings:
+            self.update_sensors(self._prev_readings)
 
     def _set_culture(self, culture: str):
         self._culture = culture
@@ -456,6 +610,5 @@ class MainWindow(QMainWindow):
         if self._collector is not None:
             dialog.culture_changed.connect(self._collector.set_culture)
         dialog.window_mode_changed.connect(self._set_window_mode)
-        dialog.transparent_changed.connect(self._set_transparent)
-        dialog.sensors_changed.connect(self._rebuild_sensor_rows)
+        dialog.sensors_changed.connect(lambda: None)  # no-op; panel is design-fixed
         dialog.exec()

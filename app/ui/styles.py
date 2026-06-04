@@ -1,308 +1,392 @@
 from app.config.config_loader import ConfigLoader
 
+# Design token defaults — "Чистая точность" variant
+_LIGHT = {
+    "background":     "#eef1f5",
+    "surface":        "#ffffff",
+    "menu_background":"#ffffff",
+    "text_primary":   "#192230",
+    "text_secondary": "#5d6b7e",
+    "primary":        "#1f6feb",
+    "on_primary":     "#ffffff",
+    "border":         "#e1e6ee",
+    "error_critical": "#d92d20",
+    "error_warning":  "#e8830c",
+}
+_DARK = {
+    "background":     "#1b2634",
+    "surface":        "#27323f",
+    "menu_background":"#202b3a",
+    "text_primary":   "#f1f5fa",
+    "text_secondary": "#a4b2c4",
+    "primary":        "#5b9bff",
+    "on_primary":     "#0a1018",
+    "border":         "#3a4655",
+    "error_critical": "#ff6157",
+    "error_warning":  "#ffb13b",
+}
+
 
 def _rgba(hex_color: str, alpha: int) -> str:
-    """#RRGGBB + alpha 0-255 → rgba() string for Qt stylesheets."""
     h = hex_color.lstrip("#")
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"rgba({r}, {g}, {b}, {alpha})"
 
 
-def build_stylesheet(config: ConfigLoader, theme: str = "light") -> str:
+def get_tokens(config: ConfigLoader, theme: str) -> dict:
+    """Return merged color tokens for the given theme."""
+    defaults = _DARK if theme == "dark" else _LIGHT
     key = "colors_dark" if theme == "dark" else "colors_light"
-    c = config.ui.get(key, {})
-    f = config.ui.get("fonts", {})
+    return {**defaults, **config.ui.get(key, {})}
 
-    bg      = c.get("background",     "#F4F6F8")
-    surface = c.get("surface",        "#FFFFFF")
-    fg      = c.get("text_primary",   "#1A1A1A")
-    fg2     = c.get("text_secondary", "#546E7A")
-    primary = c.get("primary",        "#1565C0")
-    border  = c.get("border",         "#D1D8E0")
-    menu_bg = c.get("menu_background","#E8ECF0")
-    err_red = c.get("error_critical", "#C62828")
-    err_warn= c.get("error_warning",  "#E65100")
 
-    _scale  = f.get("scale", 1.0)
+def build_stylesheet(config: ConfigLoader, theme: str = "light") -> str:
+    c = get_tokens(config, theme)
 
-    def fs(n: int) -> int:
-        return round(n * _scale)
+    bg      = c["background"]
+    surface = c["surface"]
+    fg      = c["text_primary"]
+    fg2     = c["text_secondary"]
+    primary = c["primary"]
+    border  = c["border"]
+    menu_bg = c["menu_background"]
+    crit    = c["error_critical"]
+    warn    = c["error_warning"]
+    on_pri  = c.get("on_primary", "#ffffff")
 
-    f_value = fs(f.get("value", 34))
-    f_label = fs(f.get("label", 16))
-    f_time  = fs(f.get("time",  26))
-    f_menu  = fs(f.get("menu",  18))
+    primary_dim  = _rgba(primary, 30)
+    primary_mid  = _rgba(primary, 50)
+    danger_hover = "#b92319" if theme == "light" else "#ff7a72"
 
-    # Alpha-blended accent colors for backgrounds/borders
-    primary_btn_hover  = _rgba(primary, 22)   # hover bg on transparent elements
-    primary_btn_active = _rgba(primary, 38)
-    primary_border_dim = _rgba(primary, 80)
-
-    # Danger hover — darker in light, brighter in dark
-    danger_hover = "#B71C1C" if theme == "light" else "#EF5350"
-
-    ss = f"""
-/* ── Base ──────────────────────────────────────────────────── */
+    return f"""
+/* ── Base ──────────────────────────────────────────────────────── */
 QMainWindow, QWidget {{
     background-color: {bg};
     color: {fg};
-    font-family: "Roboto", "Ubuntu", "Segoe UI", sans-serif;
-    font-size: {fs(15)}px;
+    font-family: "IBM Plex Sans", "Segoe UI", "Ubuntu", sans-serif;
+    font-size: 14px;
 }}
 
-/* ── Top bar ────────────────────────────────────────────────── */
+/* ── Top bar ────────────────────────────────────────────────────── */
 QWidget#topBar {{
     background-color: {menu_bg};
     border-bottom: 1px solid {border};
 }}
 
-/* ── Labels ─────────────────────────────────────────────────── */
-QLabel {{
-    background: transparent;
-    color: {fg};
-}}
+/* ── Time label ─────────────────────────────────────────────────── */
 QLabel#labelTime {{
-    font-size: {f_time}px;
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 30px;
     font-weight: 700;
     color: {fg};
     letter-spacing: 1px;
-}}
-QLabel#labelCulture {{
-    font-size: {f_label}px;
-    color: {fg2};
-    font-weight: 500;
+    background: transparent;
 }}
 
-/* ── МЕНЮ button — filled pill ──────────────────────────────── */
+/* ── Crop label ─────────────────────────────────────────────────── */
+QLabel#labelCropCaption {{
+    font-size: 10px;
+    font-weight: 600;
+    color: {fg2};
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: transparent;
+}}
+QLabel#labelCropName {{
+    font-size: 18px;
+    font-weight: 600;
+    color: {fg};
+    background: transparent;
+}}
+
+/* ── МЕНЮ pill button ───────────────────────────────────────────── */
 QPushButton#btnMenu {{
     background-color: {primary};
-    color: #FFFFFF;
+    color: {on_pri};
     border: none;
     border-radius: 21px;
-    font-size: {f_label}px;
+    font-size: 17px;
     font-weight: 700;
-    padding: 0 16px;
-    letter-spacing: 0.5px;
+    padding: 0 20px;
 }}
-QPushButton#btnMenu:hover    {{ background-color: {_rgba(primary, 220)}; }}
-QPushButton#btnMenu:pressed  {{ background-color: {_rgba(primary, 255)}; }}
+QPushButton#btnMenu:pressed {{ background-color: {_rgba(primary, 210)}; }}
 
-/* ── Right panel ─────────────────────────────────────────────── */
-QFrame#panelRight {{
+/* ── Panel dividers ─────────────────────────────────────────────── */
+QFrame#divider {{
+    background-color: {border};
+    border: none;
+}}
+
+/* ── Sensor column background ───────────────────────────────────── */
+QWidget#sensorColumn {{
     background-color: {bg};
-    border-left: 1px solid {border};
 }}
 
-/* ── Sensor cards ────────────────────────────────────────────── */
+/* ── Sensor card ────────────────────────────────────────────────── */
 QFrame#sensorCard {{
     background-color: {surface};
     border: 1px solid {border};
-    border-radius: 14px;
+    border-radius: 16px;
 }}
-QFrame#sensorCard[errorState="warning"] {{
-    background-color: {surface};
-    border: 2px solid {err_warn};
-    border-radius: 14px;
+QFrame#sensorCard[state="warning"] {{
+    border: 2px solid {warn};
 }}
-QFrame#sensorCard[errorState="critical"] {{
-    background-color: {surface};
-    border: 2px solid {err_red};
-    border-radius: 14px;
+QFrame#sensorCard[state="critical"] {{
+    border: 2px solid {crit};
 }}
-QLabel#sensorCardName {{
-    font-size: {fs(13)}px;
+QLabel#cardName {{
+    font-size: 12px;
     font-weight: 600;
     color: {fg2};
     background: transparent;
 }}
-QLabel#sensorValue {{
-    font-size: {f_value}px;
+QLabel#cardValue {{
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 31px;
     font-weight: 700;
     color: {fg};
     background: transparent;
 }}
+QLabel#cardValueWarn {{
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 31px;
+    font-weight: 700;
+    color: {warn};
+    background: transparent;
+}}
+QLabel#cardValueCrit {{
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 31px;
+    font-weight: 700;
+    color: {crit};
+    background: transparent;
+}}
+QLabel#cardUnit {{
+    font-size: 12px;
+    font-weight: 500;
+    color: {fg2};
+    background: transparent;
+}}
 
-/* ── Center panel ────────────────────────────────────────────── */
-QFrame#panelCenter {{
+/* ── Center panel ───────────────────────────────────────────────── */
+QWidget#panelCenter {{
     background-color: {bg};
 }}
 
-/* ── Error description box ───────────────────────────────────── */
-QFrame#errorDescBox {{
-    background-color: {"#242424" if theme == "light" else "#2E2E2E"};
-    border-radius: 12px;
+/* ── Normal mode pill ───────────────────────────────────────────── */
+QLabel#normalPill {{
+    background-color: {_rgba("#22a05a", 30)};
+    color: #22a05a;
+    border: 1px solid {_rgba("#22a05a", 100)};
+    border-radius: 999px;
+    font-size: 16px;
+    font-weight: 600;
+    padding: 6px 20px;
 }}
-QLabel#errorDescTitle {{
-    font-size: {fs(17)}px;
-    font-weight: 700;
-    color: #FFFFFF;
-    background: transparent;
-}}
-QLabel#errorDescText {{
-    font-size: {fs(14)}px;
-    color: #DDDDDD;
-    background: transparent;
-}}
-QPushButton#errorDescClose {{
-    background: transparent;
-    color: #FFFFFF;
+
+/* ── Fault icon buttons ─────────────────────────────────────────── */
+QPushButton#faultBtn {{
+    background-color: transparent;
     border: none;
-    font-size: {fs(20)}px;
-    font-weight: 700;
 }}
-QPushButton#errorDescClose:hover {{ color: #EF9A9A; }}
 
-/* ── Dialog — always opaque, visually elevated ───────────────── */
+/* ── Dialog / full-screen menu ──────────────────────────────────── */
 QDialog {{
-    background-color: {surface};
-    border: 2px solid {border};
-    border-radius: 16px;
+    background-color: {bg};
+    color: {fg};
+    border: none;
 }}
-
-/* ── Menu header ─────────────────────────────────────────────── */
 QWidget#menuHeader {{
     background-color: {menu_bg};
     border-bottom: 1px solid {border};
-    border-radius: 0px;
 }}
-QLabel#menuPageTitle {{
-    font-size: {fs(18)}px;
-    font-weight: 700;
+QLabel#menuTitle {{
+    font-size: 22px;
+    font-weight: 600;
     color: {fg};
     background: transparent;
 }}
 
-/* ── Back button — bordered, prominent ───────────────────────── */
-QPushButton#menuBackBtn {{
-    background-color: {primary_btn_hover};
-    color: {primary};
-    border: 2px solid {primary_border_dim};
-    border-radius: 10px;
-    font-size: {fs(22)}px;
-    font-weight: 700;
-    padding: 0;
-}}
-QPushButton#menuBackBtn:hover {{
-    background-color: {primary_btn_active};
-    border-color: {primary};
-}}
-QPushButton#menuBackBtn:pressed {{
-    background-color: {_rgba(primary, 55)};
-}}
-
-/* ── Nav buttons — tall, card-like ──────────────────────────── */
-QPushButton#menuNavBtn {{
+/* ── Menu nav card ──────────────────────────────────────────────── */
+QPushButton#menuNavCard {{
     background-color: {surface};
     color: {fg};
     border: 1px solid {border};
-    border-radius: 12px;
-    font-size: {fs(17)}px;
+    border-radius: 16px;
+    font-size: 19px;
     font-weight: 600;
-    text-align: center;
-    padding: 0;
+    text-align: left;
+    padding: 0 18px;
 }}
-QPushButton#menuNavBtn:hover {{
-    background-color: {primary_btn_hover};
-    border-color: {primary_border_dim};
+QPushButton#menuNavCard:pressed {{ background-color: {_rgba(primary, 20)}; }}
+QPushButton#menuNavCard[danger="true"] {{
+    border: 2px solid {crit};
+    color: {crit};
+}}
+
+/* ── Icon-back / close buttons ─────────────────────────────────── */
+QPushButton#menuIconBtn {{
+    background-color: transparent;
+    color: {fg};
+    border: 1px solid {border};
+    border-radius: 10px;
+}}
+QPushButton#menuIconBtn:pressed {{ background-color: {_rgba(primary, 30)}; }}
+
+/* ── Crop list row ──────────────────────────────────────────────── */
+QPushButton#cropRow {{
+    background-color: transparent;
+    color: {fg};
+    border: none;
+    border-top: 1px solid {border};
+    font-size: 18px;
+    font-weight: 500;
+    text-align: left;
+    padding: 0 18px;
+}}
+QPushButton#cropRow:pressed {{ background-color: {_rgba(primary, 20)}; }}
+QPushButton#cropRow[selected="true"] {{
     color: {primary};
-}}
-QPushButton#menuNavBtn:pressed {{
-    background-color: {primary_btn_active};
+    font-weight: 600;
 }}
 
-/* ── Close button ────────────────────────────────────────────── */
-QPushButton#menuCloseBtn {{
-    background-color: {menu_bg};
+/* ── Section label ──────────────────────────────────────────────── */
+QLabel#sectionLabel {{
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
     color: {fg2};
+    background: transparent;
+}}
+
+/* ── Card container (crop list, sensor list, etc.) ──────────────── */
+QFrame#listCard {{
+    background-color: {surface};
     border: 1px solid {border};
-    border-radius: 10px;
-    font-size: {fs(15)}px;
-    font-weight: 600;
-}}
-QPushButton#menuCloseBtn:hover {{
-    background-color: {border};
-    color: {fg};
+    border-radius: 16px;
 }}
 
-/* ── Section labels ──────────────────────────────────────────── */
-QLabel#menuSectionLabel {{
-    font-size: {fs(12)}px;
-    font-weight: 700;
+/* ── Sensor toggle row ──────────────────────────────────────────── */
+QLabel#sensorRowLabel {{
+    font-size: 16px;
+    font-weight: 500;
+    color: {fg};
+    background: transparent;
+}}
+
+/* ── Segmented toggle buttons ───────────────────────────────────── */
+QPushButton#segBtn {{
+    background-color: transparent;
     color: {fg2};
-    background: transparent;
-}}
-
-/* ── Stat values ─────────────────────────────────────────────── */
-QLabel#menuStatValue {{
-    font-size: {fs(22)}px;
-    font-weight: 700;
-    color: {fg};
-    background: transparent;
-}}
-QLabel#menuTableHeader {{
-    font-size: {fs(13)}px;
-    font-weight: 700;
-    color: {fg2};
-    background: transparent;
-}}
-QLabel#menuTableRow {{
-    font-size: {fs(13)}px;
-    color: {fg};
-    background: transparent;
-}}
-
-/* ── Toggle buttons — segmented look ────────────────────────── */
-QPushButton#menuToggleBtn {{
-    background-color: {menu_bg};
-    color: {fg2};
-    border: none;
-    border-radius: 8px;
-    font-size: {fs(14)}px;
-    font-weight: 600;
-    padding: 4px 8px;
-}}
-QPushButton#menuToggleBtn:checked {{
-    background-color: {primary};
-    color: #FFFFFF;
-}}
-QPushButton#menuToggleBtn:hover:!checked {{
-    background-color: {border};
-    color: {fg};
-}}
-
-/* ── Danger button ───────────────────────────────────────────── */
-QPushButton#menuDangerBtn {{
-    background-color: {err_red};
-    color: #FFFFFF;
     border: none;
     border-radius: 12px;
-    font-size: {fs(17)}px;
+    font-size: 17px;
+    font-weight: 600;
+}}
+QPushButton#segBtn:checked {{
+    background-color: {primary};
+    color: {on_pri};
+}}
+QPushButton#segBtn:pressed:!checked {{ background-color: {_rgba(primary, 20)}; }}
+
+/* ── Statistics period buttons ──────────────────────────────────── */
+QPushButton#periodBtn {{
+    background-color: transparent;
+    color: {fg2};
+    border: none;
+    border-radius: 11px;
+    font-size: 16px;
+    font-weight: 600;
+}}
+QPushButton#periodBtn:checked {{
+    background-color: {primary};
+    color: {on_pri};
+}}
+
+/* ── Export button ──────────────────────────────────────────────── */
+QPushButton#exportBtn {{
+    background-color: #22a05a;
+    color: #ffffff;
+    border: none;
+    border-radius: 999px;
+    font-size: 16px;
     font-weight: 700;
+    padding: 0 22px;
 }}
-QPushButton#menuDangerBtn:hover  {{ background-color: {danger_hover}; }}
-QPushButton#menuDangerBtn:pressed {{ background-color: {danger_hover}; }}
-
-/* ── Sensor settings group ───────────────────────────────────── */
-QFrame#sensorSettingsGroup {{
-    background-color: {menu_bg};
+QPushButton#exportSaved {{
+    background-color: transparent;
+    color: #22a05a;
     border: 1px solid {border};
-    border-radius: 10px;
+    border-radius: 999px;
+    font-size: 16px;
+    font-weight: 700;
+    padding: 0 22px;
 }}
 
-/* ── Separator ───────────────────────────────────────────────── */
-QFrame#menuSep {{
-    border: none;
-    background-color: {border};
+/* ── Stats metric card ──────────────────────────────────────────── */
+QFrame#metricCard {{
+    background-color: {surface};
+    border: 1px solid {border};
+    border-radius: 16px;
+}}
+QLabel#metricValue {{
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 44px;
+    font-weight: 600;
+    background: transparent;
+}}
+QLabel#metricUnit {{
+    font-size: 15px;
+    font-weight: 600;
+    color: {fg2};
+    background: transparent;
+}}
+QLabel#metricLabel {{
+    font-size: 13px;
+    color: {fg2};
+    background: transparent;
+    margin-top: 6px;
 }}
 
-/* ── Scrollbar — touch-friendly ──────────────────────────────── */
-QScrollArea {{
+/* ── Stats detail row ───────────────────────────────────────────── */
+QLabel#detailKey {{
+    font-size: 16px;
+    color: {fg2};
     background: transparent;
+}}
+QLabel#detailVal {{
+    font-family: "IBM Plex Mono", "Courier New", monospace;
+    font-size: 16px;
+    font-weight: 600;
+    color: {fg};
+    background: transparent;
+}}
+
+/* ── Danger button (shutdown) ───────────────────────────────────── */
+QPushButton#dangerBtn {{
+    background-color: {crit};
+    color: #ffffff;
     border: none;
+    border-radius: 999px;
+    font-size: 17px;
+    font-weight: 700;
+    padding: 0 30px;
 }}
-QScrollArea > QWidget > QWidget {{
-    background: transparent;
+QPushButton#dangerBtn:pressed {{ background-color: {danger_hover}; }}
+QPushButton#cancelBtn {{
+    background-color: transparent;
+    color: {fg};
+    border: 1px solid {border};
+    border-radius: 999px;
+    font-size: 17px;
+    font-weight: 600;
+    padding: 0 30px;
 }}
+QPushButton#cancelBtn:pressed {{ background-color: {_rgba(primary, 20)}; }}
+
+/* ── Scrollbar ──────────────────────────────────────────────────── */
+QScrollArea {{ background: transparent; border: none; }}
+QScrollArea > QWidget > QWidget {{ background: transparent; }}
 QScrollBar:vertical {{
     background: {_rgba(border, 80)};
     width: 14px;
@@ -315,23 +399,33 @@ QScrollBar::handle:vertical {{
     min-height: 40px;
     margin: 2px;
 }}
-QScrollBar::handle:vertical:hover {{
-    background: {primary};
+QScrollBar::handle:vertical:hover {{ background: {primary}; }}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
+
+/* ── Error popup dialog ─────────────────────────────────────────── */
+QDialog#errorPopup {{
+    background-color: #1c1e24;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
 }}
-QScrollBar::add-line:vertical,
-QScrollBar::sub-line:vertical {{ height: 0; }}
-QScrollBar::add-page:vertical,
-QScrollBar::sub-page:vertical {{ background: none; }}
+QLabel#errTitle {{
+    font-size: 22px;
+    font-weight: 700;
+    color: #ffffff;
+    background: transparent;
+}}
+QLabel#errDesc {{
+    font-size: 15px;
+    color: #aab0bd;
+    background: transparent;
+}}
+QPushButton#errClose {{
+    background-color: rgba(255,255,255,0.08);
+    color: #ffffff;
+    border: none;
+    border-radius: 10px;
+    font-size: 20px;
+}}
+QPushButton#errClose:pressed {{ background-color: rgba(255,255,255,0.15); }}
 """
-
-    if config.ui.get("transparent", False):
-        ss += f"""
-QMainWindow              {{ background-color: transparent; }}
-QWidget#centralWidget    {{ background-color: transparent; }}
-QFrame#panelCenter       {{ background-color: transparent; }}
-QFrame#panelRight        {{ background-color: transparent; border: none; }}
-QWidget#topBar           {{ background-color: {_rgba(menu_bg, 220)}; border-bottom: 1px solid {border}; }}
-QDialog                  {{ background-color: {surface}; border: 2px solid {border}; border-radius: 16px; }}
-"""
-
-    return ss

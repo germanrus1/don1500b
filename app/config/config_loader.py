@@ -50,6 +50,14 @@ class ConfigLoader:
     def error_history(self) -> dict:
         return self._data.get("error_history", {})
 
+    @property
+    def stats(self) -> dict:
+        return self._data.get("stats", {})
+
+    @property
+    def cultures_config(self) -> dict:
+        return self._data.get("cultures", {})
+
     def set_and_save(self, key: str, value) -> None:
         """Update a dot-notation key in memory and persist to disk."""
         keys = key.split(".")

@@ -62,6 +62,10 @@ sensors:
       debounce_ms: 100
       enabled: true
       show_in_panel: false
+    loss:
+      enabled: true
+    auger:
+      enabled: true
 stats:
   bin_volume_m3: 6.0
   session_timeout_min: 30
@@ -102,39 +106,36 @@ logging:
   description: Логирование событий в CSV
 ui:
   resolution:
-    width: 1200
+    width: 1024
     height: 600
   orientation: horizontal
   fonts:
-    title: 32
-    value: 34
-    label: 16
-    time: 26
-    menu: 18
-    scale: 2.0
+    scale: 1.0
   theme: light
   window_mode: fullscreen
   transparent: false
   colors_light:
-    background: '#F4F6F8'
-    surface: '#FFFFFF'
-    text_primary: '#1A1A1A'
-    text_secondary: '#546E7A'
-    primary: '#1565C0'
-    error_critical: '#C62828'
-    error_warning: '#E65100'
-    border: '#D1D8E0'
-    menu_background: '#E8ECF0'
+    background: '#eef1f5'
+    surface: '#ffffff'
+    text_primary: '#192230'
+    text_secondary: '#5d6b7e'
+    primary: '#1f6feb'
+    on_primary: '#ffffff'
+    error_critical: '#d92d20'
+    error_warning: '#e8830c'
+    border: '#e1e6ee'
+    menu_background: '#ffffff'
   colors_dark:
-    background: '#111318'
-    surface: '#1E2028'
-    text_primary: '#E8EAED'
-    text_secondary: '#8E9BB0'
-    primary: '#4FC3F7'
-    error_critical: '#EF5350'
-    error_warning: '#FFB300'
-    border: '#2F3340'
-    menu_background: '#252830'
+    background: '#1b2634'
+    surface: '#27323f'
+    text_primary: '#f1f5fa'
+    text_secondary: '#a4b2c4'
+    primary: '#5b9bff'
+    on_primary: '#0a1018'
+    error_critical: '#ff6157'
+    error_warning: '#ffb13b'
+    border: '#3a4655'
+    menu_background: '#202b3a'
 interface:
   display_sensors:
   - drum
