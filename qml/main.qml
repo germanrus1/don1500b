@@ -41,6 +41,7 @@ ApplicationWindow {
     Dashboard {
         anchors.fill: parent
         tokens: tok
+        onMenuRequested: menuOverlay.visible = true
     }
 
     // ── Меню ─────────────────────────────────────────────────────────────
@@ -49,9 +50,8 @@ ApplicationWindow {
         anchors.fill: parent
         tokens: tok
         visible: false
+        z: 50
     }
-
-    function openMenu() { menuOverlay.visible = true }
 
     Component.onCompleted: {
         if (bridge && bridge.windowMode === "fullscreen")

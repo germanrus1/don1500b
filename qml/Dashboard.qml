@@ -5,13 +5,8 @@ Item {
     id: root
     property var tokens: ({})
 
-    // ── Вспомогательная функция ───────────────────────────────────────────
-    function sensorData(id) {
-        var list = bridge.sensorValues
-        for (var i = 0; i < list.length; i++)
-            if (list[i].id === id) return list[i]
-        return {id: id, display: "—", state: "", unit: ""}
-    }
+    // Сигнал для main.qml — открыть меню
+    signal menuRequested()
 
     // ── Верхняя панель ────────────────────────────────────────────────────
     Rectangle {
@@ -29,6 +24,7 @@ Item {
 
         // МЕНЮ
         Rectangle {
+            id: menuBtn
             anchors { left: parent.left; leftMargin: 14; verticalCenter: parent.verticalCenter }
             width: menuBtnText.implicitWidth + 40
             height: 42
@@ -57,7 +53,7 @@ Item {
 
             MouseArea {
                 anchors.fill: parent
-                onClicked: root.parent.openMenu()
+                onClicked: root.menuRequested()
             }
         }
 
@@ -89,7 +85,7 @@ Item {
                 }
                 Text {
                     anchors.right: parent.right
-                    text: bridge.culture
+                    text: bridge ? bridge.culture : ""
                     font.pixelSize: 18
                     font.weight: Font.DemiBold
                     color: tokens.textPrimary
@@ -112,7 +108,6 @@ Item {
         }
     }
 
-    // Часы — таймер
     Timer {
         id: clockTimer
         property string timeStr: Qt.formatDateTime(new Date(), "hh:mm:ss")
@@ -128,18 +123,15 @@ Item {
         }
         spacing: 0
 
-        // Левая колонка (двигатель)
         SensorColumn {
             Layout.preferredWidth: 232
             Layout.fillHeight: true
-            sensors: bridge.leftSensors
+            sensors: bridge ? bridge.leftSensors : []
             tokens: root.tokens
         }
 
-        // Разделитель
         Rectangle { width: 1; Layout.fillHeight: true; color: tokens.border }
 
-        // Центральная панель
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -149,30 +141,28 @@ Item {
                 spacing: 22
 
                 Speedometer {
-                    id: speedo
                     tokens: root.tokens
-                    value: bridge.speed
+                    value: bridge ? bridge.speed : 0
                     anchors.horizontalCenter: parent.horizontalCenter
                 }
 
-                // Полоса ошибок (только при наличии)
                 FaultStrip {
-                    visible: bridge.faults.length > 0
-                    faults: bridge.faults
+                    id: faultStrip
+                    visible: bridge && bridge.faults.length > 0
+                    faults: bridge ? bridge.faults : []
                     tokens: root.tokens
                     anchors.horizontalCenter: parent.horizontalCenter
+                    onErrorTapped: function(fault) { errorPopup.show(fault) }
                 }
             }
         }
 
-        // Разделитель
         Rectangle { width: 1; Layout.fillHeight: true; color: tokens.border }
 
-        // Правая колонка (молотилка)
         SensorColumn {
             Layout.preferredWidth: 232
             Layout.fillHeight: true
-            sensors: bridge.rightSensors
+            sensors: bridge ? bridge.rightSensors : []
             tokens: root.tokens
         }
     }
@@ -183,11 +173,10 @@ Item {
         visible: false
         radius: 10
         color: "#1c1e24"
-        border.color: Qt.rgba(1, 1, 1, 0.08)
-        border.width: 1
+        border.color: Qt.rgba(1, 1, 1, 0.08); border.width: 1
         height: 38
         width: toastText.implicitWidth + 28
-        z: 10
+        z: 20
 
         Text {
             id: toastText
@@ -197,12 +186,7 @@ Item {
             font.weight: Font.DemiBold
         }
 
-        Timer {
-            id: toastTimer
-            interval: 2200
-            onTriggered: toast.visible = false
-        }
-
+        Timer { id: toastTimer; interval: 2200; onTriggered: toast.visible = false }
         NumberAnimation on opacity { id: fadeIn;  from: 0; to: 1; duration: 160 }
         NumberAnimation on opacity { id: fadeOut; from: 1; to: 0; duration: 400
             onFinished: toast.visible = false }
@@ -216,5 +200,109 @@ Item {
         toast.opacity = 0
         fadeIn.start()
         toastTimer.restart()
+    }
+
+    // ── Попап ошибки ──────────────────────────────────────────────────────
+    Item {
+        id: errorPopup
+        anchors.fill: parent
+        visible: false
+        z: 30
+
+        function show(fault) {
+            faultData.level = fault.level || ""
+            faultData.icon  = fault.icon  || ""
+            faultData.title = fault.full  || fault.short || ""
+            faultData.desc  = fault.full  || ""
+            errorPopup.visible = true
+        }
+
+        QtObject {
+            id: faultData
+            property string level: ""
+            property string icon:  ""
+            property string title: ""
+            property string desc:  ""
+        }
+
+        // Затемнение
+        Rectangle {
+            anchors.fill: parent
+            color: Qt.rgba(0, 0, 0, 0.55)
+            MouseArea { anchors.fill: parent; onClicked: errorPopup.visible = false }
+        }
+
+        // Карточка (по центру, не перекрывает колонки датчиков)
+        Rectangle {
+            anchors.centerIn: parent
+            width: Math.min(520, parent.width - 520)
+            height: cardCol.implicitHeight + 48
+            radius: 12
+            color: "#1c1e24"
+            border.color: Qt.rgba(1, 1, 1, 0.08); border.width: 1
+
+            Column {
+                id: cardCol
+                anchors { left: parent.left; right: parent.right; top: parent.top; margins: 26 }
+                spacing: 12
+
+                // Шапка
+                Row {
+                    spacing: 12
+                    Rectangle {
+                        width: 46; height: 46; radius: 23
+                        color: faultData.level === "critical" ? tokens.critical : tokens.warning
+                        Text {
+                            anchors.centerIn: parent
+                            text: faultData.icon
+                            font.family: "Material Design Icons"
+                            font.pixelSize: 26
+                            color: "#ffffff"
+                        }
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: faultData.level === "critical" ? "КРИТИЧЕСКАЯ ОШИБКА" : "ПРЕДУПРЕЖДЕНИЕ"
+                        font.pixelSize: 11; font.weight: Font.Bold
+                        font.letterSpacing: 1.5
+                        color: faultData.level === "critical" ? tokens.critical : tokens.warning
+                    }
+                }
+
+                // Заголовок
+                Text {
+                    width: parent.width
+                    text: faultData.title
+                    font.pixelSize: 20; font.weight: Font.Bold
+                    color: "#ffffff"
+                    wrapMode: Text.WordWrap
+                }
+
+                // Описание
+                Text {
+                    width: parent.width
+                    text: "Датчик: " + faultData.title
+                    font.pixelSize: 14
+                    color: "#aab0bd"
+                    wrapMode: Text.WordWrap
+                    lineHeight: 1.5
+                }
+            }
+
+            // Кнопка закрыть
+            Rectangle {
+                anchors { top: parent.top; right: parent.right; margins: 16 }
+                width: 40; height: 40; radius: 10
+                color: Qt.rgba(1, 1, 1, 0.08)
+                Text {
+                    anchors.centerIn: parent
+                    text: bridge ? bridge.uiIcons.close : "✕"
+                    font.family: "Material Design Icons"
+                    font.pixelSize: 22
+                    color: "#ffffff"
+                }
+                MouseArea { anchors.fill: parent; onClicked: errorPopup.visible = false }
+            }
+        }
     }
 }
