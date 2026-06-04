@@ -35,6 +35,28 @@ _I = {
     "download":   "\U000f01da",
     "sun":        "\U000f05a8",
     "moon":       "\U000f0594",
+    # Культуры
+    "barley":     "\U000f0073",
+    "corn":       "\U000f07b8",
+    "flower":     "\U000f024a",
+    "sprout":     "\U000f0e66",
+    "seed":       "\U000f0e62",
+    "nature":     "\U000f038e",
+}
+
+# Метаданные культур: иконка и цвет для каждой
+CROP_META = {
+    "Пшеница":     {"icon": _I["barley"], "color": "#e8a020"},
+    "Ячмень":      {"icon": _I["barley"], "color": "#c49a30"},
+    "Рожь":        {"icon": _I["grain"],  "color": "#9a6a30"},
+    "Овёс":        {"icon": _I["seed"],   "color": "#c4a060"},
+    "Кукуруза":    {"icon": _I["corn"],   "color": "#f0c010"},
+    "Подсолнечник":{"icon": _I["flower"], "color": "#f5b010"},
+    "Рапс":        {"icon": _I["sprout"], "color": "#a8c020"},
+    "Гречиха":     {"icon": _I["seed"],   "color": "#c08040"},
+    "Горох":       {"icon": _I["sprout"], "color": "#60a820"},
+    "Фацелия":     {"icon": _I["flower"], "color": "#6060d0"},
+    "Эспарцет":    {"icon": _I["nature"], "color": "#c03030"},
 }
 
 SENSOR_META = {
@@ -80,11 +102,12 @@ class AppBridge(QObject):
     """Единый Python-объект, доступный из QML через контекстное свойство 'bridge'."""
 
     # ── Сигналы ────────────────────────────────────────────────────────────
-    themeChanged    = pyqtSignal()
-    cultureChanged  = pyqtSignal()
-    sensorsUpdated  = pyqtSignal()   # любое изменение значений датчиков
-    faultsUpdated   = pyqtSignal()   # изменился список активных ошибок
-    speedChanged    = pyqtSignal()
+    themeChanged       = pyqtSignal()
+    cultureChanged     = pyqtSignal()
+    sensorsUpdated     = pyqtSignal()
+    faultsUpdated      = pyqtSignal()
+    speedChanged       = pyqtSignal()
+    windowModeChanged  = pyqtSignal()
 
     def __init__(self, config: ConfigLoader, logger: DataLogger,
                  collector=None, parent=None):
@@ -129,6 +152,15 @@ class AppBridge(QObject):
     @pyqtProperty("QVariantList", constant=True)
     def cultures(self) -> list:
         return self._config.interface.get("cultures", ["Пшеница"])
+
+    @pyqtProperty("QVariantList", constant=True)
+    def cropItems(self) -> list:
+        """Список культур с иконками и цветами для отображения в меню."""
+        result = []
+        for name in self._config.interface.get("cultures", ["Пшеница"]):
+            meta = CROP_META.get(name, {"icon": _I["grain"], "color": "#888888"})
+            result.append({"name": name, "icon": meta["icon"], "color": meta["color"]})
+        return result
 
     @pyqtSlot(str)
     def setCulture(self, name: str):
@@ -223,35 +255,97 @@ class AppBridge(QObject):
     @pyqtSlot(str)
     def setWindowMode(self, mode: str):
         self._config.set_and_save("ui.window_mode", mode)
+        self.windowModeChanged.emit()
 
-    @pyqtProperty(str, constant=True)
+    @pyqtProperty(str, notify=windowModeChanged)
     def windowMode(self) -> str:
         return self._config.ui.get("window_mode", "windowed")
 
     # ── Статистика ─────────────────────────────────────────────────────────
 
     @pyqtProperty("QVariantMap", notify=sensorsUpdated)
-    def stats(self) -> dict:
-        elapsed_min = int(
-            (datetime.now() - self._work_start).total_seconds() / 60
-        )
+    def statsSession(self) -> dict:
+        """Текущая сессия — обновляется в реальном времени."""
+        elapsed_min = int((datetime.now() - self._work_start).total_seconds() / 60)
         h, m = elapsed_min // 60, elapsed_min % 60
         base = {
-            "date":     datetime.now().strftime("%d.%m.%Y"),
-            "workTime": f"{h} ч {m:02d} мин",
-            "culture":  self._culture,
-            "unloads":  str(self._unload_count),
-            "area":     "—",
-            "harvest":  "—",
+            "workTime":  f"{h} ч {m:02d} мин",
+            "culture":   self._culture,
+            "unloads":   str(self._unload_count),
+            "weightKg":  "—",
+            "efficiency":"—",
+            "warnCount": "—",
         }
         if self._collector:
             try:
-                s = self._collector.get_session_stats()
-                base["area"]    = f"{s.get('area_ha', 0.0):.1f}"
-                base["harvest"] = f"{s.get('harvest_t', 0.0):.1f}"
+                s = self._collector.get_live_session_data()
+                wkg = s.get("weight_kg", 0.0)
+                base["weightKg"]  = f"{wkg:.0f}" if wkg else "—"
+                base["efficiency"]= f"{s.get('efficiency_pct', 0):.0f}%"
+                base["warnCount"] = str(s.get("warn_count", 0))
+                tm = s.get("threshing_min", 0)
+                th, tm2 = int(tm // 60), int(tm % 60)
+                base["threshTime"]= f"{th} ч {tm2:02d} мин"
             except Exception:
                 pass
         return base
+
+    @pyqtProperty("QVariantMap", notify=sensorsUpdated)
+    def statsDay(self) -> dict:
+        """Данные за сегодняшний день из базы данных."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        if not self._collector:
+            return {"date": today, "sessions": "0", "workTime": "—",
+                    "unloads": "0", "weightKg": "—", "efficiency": "—"}
+        try:
+            s = self._collector._storage.daily_summary(today)
+            dur = s.get("duration_min", 0)
+            h, m = int(dur // 60), int(dur % 60)
+            wkg = s.get("weight_kg", 0.0)
+            eff = s.get("efficiency_pct", 0)
+            return {
+                "date":      datetime.now().strftime("%d.%m.%Y"),
+                "sessions":  str(s.get("session_count", 0)),
+                "workTime":  f"{h} ч {m:02d} мин",
+                "unloads":   str(s.get("unload_count", 0)),
+                "weightKg":  f"{wkg:.0f} кг" if wkg else "—",
+                "efficiency":f"{eff:.0f}%" if eff else "—",
+                "errors":    str(s.get("error_count", 0)),
+            }
+        except Exception:
+            return {"date": today, "sessions": "—", "workTime": "—",
+                    "unloads": "—", "weightKg": "—", "efficiency": "—", "errors": "—"}
+
+    @pyqtProperty("QVariantMap", notify=sensorsUpdated)
+    def statsSeason(self) -> dict:
+        """Данные за текущий сезон (год) из базы данных."""
+        year = datetime.now().year
+        if not self._collector:
+            return {"year": str(year), "days": "0", "threshHours": "—",
+                    "unloads": "0", "weightT": "—", "bestDay": "—"}
+        try:
+            s = self._collector._storage.season_summary(year)
+            wkg = s.get("weight_kg", 0.0)
+            best = s.get("best_day", "")
+            if best:
+                try:
+                    from datetime import datetime as dt
+                    best = dt.strptime(best, "%Y-%m-%d").strftime("%d.%m")
+                except Exception:
+                    pass
+            return {
+                "year":        str(year),
+                "days":        str(s.get("days_worked", 0)),
+                "threshHours": f"{s.get('threshing_hours', 0):.1f} ч",
+                "unloads":     str(s.get("unload_count", 0)),
+                "weightT":     f"{wkg/1000:.1f} т" if wkg else "—",
+                "bestDay":     best or "—",
+                "bestDayKg":   f"{s.get('best_day_weight_kg', 0):.0f} кг"
+                               if s.get("best_day_weight_kg") else "—",
+            }
+        except Exception:
+            return {"year": str(year), "days": "—", "threshHours": "—",
+                    "unloads": "—", "weightT": "—", "bestDay": "—", "bestDayKg": "—"}
 
     # ── Навигационные карточки меню ────────────────────────────────────────
 

@@ -57,4 +57,12 @@ ApplicationWindow {
         if (bridge && bridge.windowMode === "fullscreen")
             root.showFullScreen()
     }
+
+    Connections {
+        target: bridge
+        function onWindowModeChanged() {
+            if (bridge.windowMode === "fullscreen") root.showFullScreen()
+            else root.showNormal()
+        }
+    }
 }
