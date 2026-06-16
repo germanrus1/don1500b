@@ -108,6 +108,7 @@ class AppBridge(QObject):
     faultsUpdated      = pyqtSignal()
     speedChanged       = pyqtSignal()
     windowModeChanged  = pyqtSignal()
+    enabledChanged     = pyqtSignal()
 
     def __init__(self, config: ConfigLoader, logger: DataLogger,
                  collector=None, parent=None):
@@ -125,6 +126,12 @@ class AppBridge(QObject):
         self._values: Dict[str, float] = {}
         self._states: Dict[str, str]   = {}   # "" | "warning" | "critical"
         self._faults: list             = []    # [{id, level, short, full}]
+
+        # Включённость датчиков (загружается из config)
+        saved = config.ui.get("sensors_enabled", {})
+        self._enabled_sensors: Dict[str, bool] = {
+            sid: bool(saved.get(sid, True)) for sid in SENSOR_META
+        }
 
     # ── Тема ───────────────────────────────────────────────────────────────
 
@@ -170,13 +177,26 @@ class AppBridge(QObject):
 
     # ── Датчики ────────────────────────────────────────────────────────────
 
-    @pyqtProperty("QVariantList", constant=True)
-    def leftSensors(self) -> list:
-        return [self._sensor_item(sid) for sid in LEFT_SENSORS]
+    @pyqtProperty("QVariantMap", notify=enabledChanged)
+    def enabledSensors(self) -> dict:
+        return dict(self._enabled_sensors)
 
-    @pyqtProperty("QVariantList", constant=True)
+    @pyqtSlot(str, bool)
+    def setSensorEnabled(self, sid: str, enabled: bool):
+        if sid in SENSOR_META and self._enabled_sensors.get(sid) != enabled:
+            self._enabled_sensors[sid] = enabled
+            self._config.set_and_save(f"ui.sensors_enabled.{sid}", enabled)
+            self.enabledChanged.emit()
+
+    @pyqtProperty("QVariantList", notify=enabledChanged)
+    def leftSensors(self) -> list:
+        return [self._sensor_item(sid) for sid in LEFT_SENSORS
+                if self._enabled_sensors.get(sid, True)]
+
+    @pyqtProperty("QVariantList", notify=enabledChanged)
     def rightSensors(self) -> list:
-        return [self._sensor_item(sid) for sid in RIGHT_SENSORS]
+        return [self._sensor_item(sid) for sid in RIGHT_SENSORS
+                if self._enabled_sensors.get(sid, True)]
 
     @pyqtProperty("QVariantList", notify=sensorsUpdated)
     def sensorValues(self) -> list:

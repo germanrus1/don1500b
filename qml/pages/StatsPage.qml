@@ -52,12 +52,13 @@ Item {
 
         // ── Контент по вкладке ────────────────────────────────────────────
         ScrollView {
+            id: statsScroll
             width: parent.width
             height: parent.height - 56 - 16
             contentWidth: availableWidth
 
             Column {
-                width: parent.availableWidth
+                width: statsScroll.availableWidth
                 spacing: 14
 
                 // Метрики (3 плитки)

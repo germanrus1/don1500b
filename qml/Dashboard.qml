@@ -69,8 +69,19 @@ Item {
 
         // Культура
         Row {
+            id: cropRow
             anchors { right: parent.right; rightMargin: 14; verticalCenter: parent.verticalCenter }
             spacing: 9
+
+            property var cropMeta: {
+                if (!bridge) return {"icon": "", "color": "#22a05a"}
+                var items = bridge.cropItems
+                var name = bridge.culture
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].name === name) return items[i]
+                }
+                return {"icon": "", "color": "#22a05a"}
+            }
 
             Column {
                 anchors.verticalCenter: parent.verticalCenter
@@ -95,14 +106,18 @@ Item {
             Rectangle {
                 width: 34; height: 34
                 radius: 10
-                color: Qt.rgba(0x22/255, 0xa0/255, 0x5a/255, 0.16)
+                color: Qt.rgba(
+                    parseInt(cropRow.cropMeta.color.slice(1,3), 16) / 255,
+                    parseInt(cropRow.cropMeta.color.slice(3,5), 16) / 255,
+                    parseInt(cropRow.cropMeta.color.slice(5,7), 16) / 255,
+                    0.16)
                 anchors.verticalCenter: parent.verticalCenter
                 Text {
                     anchors.centerIn: parent
-                    text: bridge ? bridge.uiIcons.leaf : ""
+                    text: cropRow.cropMeta.icon
                     font.family: "Material Design Icons"
                     font.pixelSize: 22
-                    color: "#22a05a"
+                    color: cropRow.cropMeta.color
                 }
             }
         }
@@ -128,6 +143,7 @@ Item {
             Layout.fillHeight: true
             sensors: bridge ? bridge.leftSensors : []
             tokens: root.tokens
+            dashboard: root
         }
 
         Rectangle { width: 1; Layout.fillHeight: true; color: tokens.border }
@@ -164,6 +180,7 @@ Item {
             Layout.fillHeight: true
             sensors: bridge ? bridge.rightSensors : []
             tokens: root.tokens
+            dashboard: root
         }
     }
 

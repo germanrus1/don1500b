@@ -3,11 +3,12 @@ import QtQuick.Layouts
 import QtQuick.Controls
 
 ScrollView {
+    id: sv
     property var tokens: ({})
     contentWidth: availableWidth
 
     Column {
-        width: parent.availableWidth
+        width: sv.availableWidth
         padding: 22; spacing: 12
 
         Text {
@@ -77,19 +78,21 @@ ScrollView {
                             Rectangle {
                                 id: toggleRect
                                 width: 54; height: 32; radius: 999
-                                property bool on: true
+                                property bool on: bridge ? bridge.enabledSensors[modelData.id] !== false : true
                                 color: on ? modelData.color : (tokens.border || "#e1e6ee")
 
                                 Rectangle {
                                     width: 26; height: 26; radius: 13
                                     color: "#ffffff"
-                                    x: parent.on ? parent.width - width - 3 : 3
+                                    x: toggleRect.on ? parent.width - width - 3 : 3
                                     anchors.verticalCenter: parent.verticalCenter
                                     Behavior on x { NumberAnimation { duration: 150 } }
                                 }
                                 MouseArea {
                                     anchors.fill: parent
-                                    onClicked: toggleRect.on = !toggleRect.on
+                                    onClicked: {
+                                        if (bridge) bridge.setSensorEnabled(modelData.id, !toggleRect.on)
+                                    }
                                 }
                             }
                         }

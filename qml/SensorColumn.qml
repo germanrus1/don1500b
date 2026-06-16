@@ -6,6 +6,7 @@ Item {
     id: root
     property var sensors: []
     property var tokens: ({})
+    property Item dashboard: null
 
     ColumnLayout {
         anchors {
@@ -41,12 +42,12 @@ Item {
                 }
 
                 onTapped: function(fullName) {
-                    // Определяем сторону для позиции тоста
-                    var gPos = card.mapToItem(root.parent, card.width / 2, card.height / 2)
+                    if (!root.dashboard) return
+                    var gPos = card.mapToItem(root.dashboard, card.width / 2, card.height / 2)
                     var toastX = root.sensors === bridge.leftSensors
                                  ? 232 + 10
-                                 : root.parent.width - 232 - 10 - 200
-                    root.parent.showToast(fullName, toastX, gPos.y)
+                                 : root.dashboard.width - 232 - 10 - 200
+                    root.dashboard.showToast(fullName, toastX, gPos.y)
                 }
             }
         }

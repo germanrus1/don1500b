@@ -47,7 +47,11 @@
       "Read(//tmp/**)",
       "Bash(mkdir -p /tmp/design_bundle)",
       "Bash(tar -xf /tmp/design.gz -C /tmp/design_bundle)",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(start /B python main.py)",
+      "Bash(python main.py)",
+      "Bash(kill %1)",
+      "Bash(echo \"PID: $!\")"
     ]
   }
 }

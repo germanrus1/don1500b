@@ -1,0 +1,1 @@
+[SensorController] GPIO unavailable (No module named 'RPi'), using mock mode
