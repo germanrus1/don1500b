@@ -192,6 +192,7 @@ Item {
         {label: "Культура",        value: _s.culture   || "—"},
         {label: "Время в работе",  value: _s.workTime  || "—"},
         {label: "Время молотьбы",  value: _s.threshTime|| "—"},
+        {label: "Убранная площадь",value: _s.areaHa || "—"},
         {label: "Предупреждений",  value: _s.warnCount || "—"},
     ]
 
@@ -206,6 +207,7 @@ Item {
         {label: "Дата",            value: _d.date      || "—"},
         {label: "Сессий за день",  value: _d.sessions  || "—"},
         {label: "Время в работе",  value: _d.workTime  || "—"},
+        {label: "Убранная площадь",value: _d.areaHa    || "—"},
         {label: "Ошибок",          value: _d.errors    || "—"},
     ]
 
@@ -219,6 +221,7 @@ Item {
     property var seasonRows: [
         {label: "Сезон",           value: _z.year        || "—"},
         {label: "Время молотьбы",  value: _z.threshHours || "—"},
+        {label: "Убранная площадь",value: _z.areaHa      || "—"},
         {label: "Лучший день",     value: _z.bestDay     || "—"},
         {label: "Намолот лучшего", value: _z.bestDayKg   || "—"},
     ]

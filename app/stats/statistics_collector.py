@@ -54,6 +54,9 @@ class StatisticsCollector(QObject):
         drum_cfg = config.sensors.get("list", {}).get("drum", {})
         self._drum_threshold: float = drum_cfg.get("error_threshold_low", 100)
 
+        harvest_cfg = config.get("harvest", {}) or {}
+        self._header_width_m: float = harvest_cfg.get("header_width_m", 6.0)
+
         # Session state
         self._session_id: Optional[int] = None
         self._session_start: Optional[datetime] = None
@@ -62,11 +65,13 @@ class StatisticsCollector(QObject):
         # Time tracking (monotonic, not persisted directly)
         self._threshing_start: Optional[float] = None
         self._threshing_sec: float = 0.0
+        self._last_speed_mono: Optional[float] = None
 
         # In-memory counters (written to DB on heartbeat and at session close)
         self._unload_count: int = 0
         self._volume_m3: float = 0.0
         self._weight_kg: float = 0.0
+        self._area_m2: float = 0.0
         self._warn_count: int = 0
         self._error_count: int = 0
 
@@ -76,6 +81,7 @@ class StatisticsCollector(QObject):
         self._culture_unloads: int = 0
         self._culture_volume: float = 0.0
         self._culture_weight: float = 0.0
+        self._culture_area_m2: float = 0.0
 
         self._prev_statuses: Dict[str, SensorStatus] = {}
         self._accum = _RpmAccumulator()
@@ -153,6 +159,7 @@ class StatisticsCollector(QObject):
         self._unload_count = session.unload_count
         self._volume_m3 = session.volume_m3
         self._weight_kg = session.weight_kg
+        self._area_m2 = session.area_ha * 10000
         self._warn_count = session.warn_count
         self._error_count = session.error_count
         self._culture = (
@@ -164,6 +171,7 @@ class StatisticsCollector(QObject):
                 self._culture_unloads = sc.unload_count
                 self._culture_volume = sc.volume_m3
                 self._culture_weight = sc.weight_kg
+                self._culture_area_m2 = sc.area_ha * 10000
                 break
 
     def _open_session(self):
@@ -174,12 +182,15 @@ class StatisticsCollector(QObject):
         self._unload_count = 0
         self._volume_m3 = 0.0
         self._weight_kg = 0.0
+        self._area_m2 = 0.0
         self._warn_count = 0
         self._error_count = 0
         self._culture_start = now
         self._culture_unloads = 0
         self._culture_volume = 0.0
         self._culture_weight = 0.0
+        self._culture_area_m2 = 0.0
+        self._last_speed_mono = None
         self._accum.reset()
         self._prev_statuses.clear()
 
@@ -207,6 +218,7 @@ class StatisticsCollector(QObject):
             unload_count=self._unload_count,
             volume_m3=round(self._volume_m3, 2),
             weight_kg=round(self._weight_kg, 2),
+            area_ha=round(self._area_m2 / 10000, 3),
             warn_count=self._warn_count,
             error_count=self._error_count,
             avg_rpm_drum=avgs.get("drum"),
@@ -224,6 +236,7 @@ class StatisticsCollector(QObject):
         self._unload_count = 0
         self._volume_m3 = 0.0
         self._weight_kg = 0.0
+        self._area_m2 = 0.0
         self._warn_count = 0
         self._error_count = 0
         self._accum.reset()
@@ -277,6 +290,7 @@ class StatisticsCollector(QObject):
             unload_count=self._unload_count,
             volume_m3=round(self._volume_m3, 2),
             weight_kg=round(self._weight_kg, 2),
+            area_ha=round(self._area_m2 / 10000, 3),
             warn_count=self._warn_count,
             error_count=self._error_count,
             avg_rpm_drum=avgs.get("drum"),
@@ -285,12 +299,17 @@ class StatisticsCollector(QObject):
             avg_rpm_fan=avgs.get("fan_speed"),
         )
 
+    # ── Жатка / площадь ───────────────────────────────────────────────────
+
+    def set_header_width(self, width_m: float):
+        self._header_width_m = width_m
+
     # ── Culture ───────────────────────────────────────────────────────────
 
     def _flush_culture(self, time_end: Optional[datetime] = None):
         if self._session_id is None or not self._culture_start:
             return
-        if self._culture_unloads == 0:
+        if self._culture_unloads == 0 and self._culture_area_m2 == 0.0:
             return
         self._storage.upsert_culture(
             self._session_id,
@@ -300,6 +319,7 @@ class StatisticsCollector(QObject):
             self._culture_weight,
             self._culture_start,
             time_end,
+            area_ha=round(self._culture_area_m2 / 10000, 3),
         )
 
     def set_culture(self, culture: str):
@@ -312,6 +332,7 @@ class StatisticsCollector(QObject):
         self._culture_unloads = 0
         self._culture_volume = 0.0
         self._culture_weight = 0.0
+        self._culture_area_m2 = 0.0
         if self._session_id is not None:
             self._storage.set_state("current_culture", culture)
 
@@ -343,6 +364,18 @@ class StatisticsCollector(QObject):
             if self._threshing_start is not None:
                 self._threshing_sec += time.monotonic() - self._threshing_start
                 self._threshing_start = None
+
+        # Area: distance traveled (speed sensor) × header width, only while threshing
+        now_mono = time.monotonic()
+        speed_reading = readings.get("speed")
+        speed_kmh = speed_reading.value if speed_reading else 0.0
+        if is_threshing and self._last_speed_mono is not None:
+            dt = now_mono - self._last_speed_mono
+            if 0 < dt < 5:
+                area_m2 = (speed_kmh * 1000.0 / 3600.0 * dt) * self._header_width_m
+                self._area_m2 += area_m2
+                self._culture_area_m2 += area_m2
+        self._last_speed_mono = now_mono
 
         # Error transitions
         if self._session_id is not None:
@@ -429,6 +462,7 @@ class StatisticsCollector(QObject):
             "unload_count": self._unload_count,
             "volume_m3": round(self._volume_m3, 2),
             "weight_kg": round(self._weight_kg, 2),
+            "area_ha": round(self._area_m2 / 10000, 3),
             "warn_count": self._warn_count,
             "error_count": self._error_count,
             "culture": self._culture,

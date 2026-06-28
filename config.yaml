@@ -62,6 +62,15 @@ sensors:
       debounce_ms: 100
       enabled: true
       show_in_panel: false
+    speed:
+      gpio: 26
+      type: impulse
+      nominal_rpm: 65
+      debounce_ms: 30
+      description: Скорость движения комбайна
+      units: км/ч
+      enabled: true
+      show_in_panel: false
     loss:
       enabled: true
     auger:
@@ -72,6 +81,9 @@ stats:
   bin_volume_m3: 6.0
   session_timeout_min: 30
   heartbeat_interval_sec: 60
+harvest:
+  header_width_m: 6.0
+  wheel_circumference_m: 1.8
 cultures:
   Пшеница:
     density: 0.77

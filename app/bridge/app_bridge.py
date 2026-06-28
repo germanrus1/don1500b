@@ -109,6 +109,7 @@ class AppBridge(QObject):
     speedChanged       = pyqtSignal()
     windowModeChanged  = pyqtSignal()
     enabledChanged     = pyqtSignal()
+    headerWidthChanged = pyqtSignal()
 
     def __init__(self, config: ConfigLoader, logger: DataLogger,
                  collector=None, parent=None):
@@ -119,6 +120,7 @@ class AppBridge(QObject):
         self._theme     = config.ui.get("theme", "light")
         self._culture   = config.interface.get("cultures", ["Пшеница"])[0]
         self._speed     = 0.0
+        self._header_width_m = float(config.get("harvest.header_width_m", 6.0))
         self._unload_count = 0
         self._work_start   = datetime.now()
 
@@ -232,10 +234,31 @@ class AppBridge(QObject):
     def speed(self) -> float:
         return self._speed
 
+    # ── Жатка / площадь ────────────────────────────────────────────────────
+
+    @pyqtProperty(float, notify=headerWidthChanged)
+    def headerWidth(self) -> float:
+        return self._header_width_m
+
+    @pyqtSlot(float)
+    def setHeaderWidth(self, width_m: float):
+        width_m = round(width_m, 2)
+        if width_m > 0 and self._header_width_m != width_m:
+            self._header_width_m = width_m
+            self._config.set_and_save("harvest.header_width_m", width_m)
+            if self._collector:
+                self._collector.set_header_width(width_m)
+            self.headerWidthChanged.emit()
+
     # ── Слоты от сенсор-контроллера ────────────────────────────────────────
 
     @pyqtSlot(dict)
     def onSensorUpdate(self, readings: Dict[str, SensorReading]):
+        speed_reading = readings.get("speed")
+        if speed_reading is not None and speed_reading.value != self._speed:
+            self._speed = speed_reading.value
+            self.speedChanged.emit()
+
         new_faults = []
         for hw_name, reading in readings.items():
             did = HW_ALIAS.get(hw_name, hw_name)
@@ -295,6 +318,7 @@ class AppBridge(QObject):
             "weightKg":  "—",
             "efficiency":"—",
             "warnCount": "—",
+            "areaHa":    "—",
         }
         if self._collector:
             try:
@@ -303,6 +327,8 @@ class AppBridge(QObject):
                 base["weightKg"]  = f"{wkg:.0f}" if wkg else "—"
                 base["efficiency"]= f"{s.get('efficiency_pct', 0):.0f}%"
                 base["warnCount"] = str(s.get("warn_count", 0))
+                area = s.get("area_ha", 0.0)
+                base["areaHa"]    = f"{area:.2f} га" if area else "—"
                 tm = s.get("threshing_min", 0)
                 th, tm2 = int(tm // 60), int(tm % 60)
                 base["threshTime"]= f"{th} ч {tm2:02d} мин"
@@ -316,13 +342,14 @@ class AppBridge(QObject):
         today = datetime.now().strftime("%Y-%m-%d")
         if not self._collector:
             return {"date": today, "sessions": "0", "workTime": "—",
-                    "unloads": "0", "weightKg": "—", "efficiency": "—"}
+                    "unloads": "0", "weightKg": "—", "efficiency": "—", "areaHa": "—"}
         try:
             s = self._collector._storage.daily_summary(today)
             dur = s.get("duration_min", 0)
             h, m = int(dur // 60), int(dur % 60)
             wkg = s.get("weight_kg", 0.0)
             eff = s.get("efficiency_pct", 0)
+            area = s.get("area_ha", 0.0)
             return {
                 "date":      datetime.now().strftime("%d.%m.%Y"),
                 "sessions":  str(s.get("session_count", 0)),
@@ -331,10 +358,11 @@ class AppBridge(QObject):
                 "weightKg":  f"{wkg:.0f} кг" if wkg else "—",
                 "efficiency":f"{eff:.0f}%" if eff else "—",
                 "errors":    str(s.get("error_count", 0)),
+                "areaHa":    f"{area:.2f} га" if area else "—",
             }
         except Exception:
             return {"date": today, "sessions": "—", "workTime": "—",
-                    "unloads": "—", "weightKg": "—", "efficiency": "—", "errors": "—"}
+                    "unloads": "—", "weightKg": "—", "efficiency": "—", "errors": "—", "areaHa": "—"}
 
     @pyqtProperty("QVariantMap", notify=sensorsUpdated)
     def statsSeason(self) -> dict:
@@ -342,10 +370,11 @@ class AppBridge(QObject):
         year = datetime.now().year
         if not self._collector:
             return {"year": str(year), "days": "0", "threshHours": "—",
-                    "unloads": "0", "weightT": "—", "bestDay": "—"}
+                    "unloads": "0", "weightT": "—", "bestDay": "—", "areaHa": "—"}
         try:
             s = self._collector._storage.season_summary(year)
             wkg = s.get("weight_kg", 0.0)
+            area = s.get("area_ha", 0.0)
             best = s.get("best_day", "")
             if best:
                 try:
@@ -362,10 +391,11 @@ class AppBridge(QObject):
                 "bestDay":     best or "—",
                 "bestDayKg":   f"{s.get('best_day_weight_kg', 0):.0f} кг"
                                if s.get("best_day_weight_kg") else "—",
+                "areaHa":      f"{area:.1f} га" if area else "—",
             }
         except Exception:
             return {"year": str(year), "days": "—", "threshHours": "—",
-                    "unloads": "—", "weightT": "—", "bestDay": "—", "bestDayKg": "—"}
+                    "unloads": "—", "weightT": "—", "bestDay": "—", "bestDayKg": "—", "areaHa": "—"}
 
     # ── Навигационные карточки меню ────────────────────────────────────────
 

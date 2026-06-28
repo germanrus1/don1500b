@@ -132,7 +132,14 @@ class SensorController(QThread):
                 continue
             sensor_type = cfg.get("type")
 
-            if sensor_type == "impulse":
+            if name == "speed":
+                wheel_rpm = self._counters[name].rpm() if name in self._counters else 0.0
+                circumference = self._config.get("harvest.wheel_circumference_m", 1.8)
+                value = round(wheel_rpm * circumference * 0.06, 2)  # км/ч
+                unit = cfg.get("units", "км/ч")
+                status = SensorStatus.OK
+
+            elif sensor_type == "impulse":
                 value = self._counters[name].rpm() if name in self._counters else 0.0
                 unit = cfg.get("units", "об/мин")
                 status = self._error_handler.check(name, value, drum_spinning)

@@ -33,6 +33,7 @@ class Session(_Base):
     unload_count = IntegerField(default=0)
     volume_m3 = FloatField(default=0)
     weight_kg = FloatField(default=0)
+    area_ha = FloatField(default=0)
     avg_rpm_drum = FloatField(null=True)
     avg_rpm_kolosa = FloatField(null=True)
     avg_rpm_solomotryas = FloatField(null=True)
@@ -51,6 +52,7 @@ class SessionCulture(_Base):
     unload_count = IntegerField(default=0)
     volume_m3 = FloatField(default=0)
     weight_kg = FloatField(default=0)
+    area_ha = FloatField(default=0)
     time_start = DateTimeField(null=True)
     time_end = DateTimeField(null=True)
 
@@ -89,6 +91,15 @@ class StatisticsStorage:
         _proxy.initialize(db)
         db.connect()
         db.create_tables([Session, SessionCulture, ErrorEvent, AppState], safe=True)
+        self._migrate(db)
+
+    @staticmethod
+    def _migrate(db):
+        """Добавляет новые колонки в уже существующие таблицы (peewee create_tables их не добавляет)."""
+        for table, column in (("sessions", "area_ha"), ("session_cultures", "area_ha")):
+            existing = {row[1] for row in db.execute_sql(f"PRAGMA table_info({table})").fetchall()}
+            if column not in existing:
+                db.execute_sql(f"ALTER TABLE {table} ADD COLUMN {column} REAL DEFAULT 0")
 
     def close(self):
         try:
@@ -171,6 +182,7 @@ class StatisticsStorage:
         weight_kg: float,
         time_start: Optional[datetime],
         time_end: Optional[datetime],
+        area_ha: float = 0.0,
     ):
         try:
             sc = SessionCulture.get(
@@ -181,6 +193,7 @@ class StatisticsStorage:
                 unload_count=unload_count,
                 volume_m3=volume_m3,
                 weight_kg=weight_kg,
+                area_ha=area_ha,
                 time_end=time_end,
             ).where(SessionCulture.id == sc.id).execute()
         except SessionCulture.DoesNotExist:
@@ -190,6 +203,7 @@ class StatisticsStorage:
                 unload_count=unload_count,
                 volume_m3=volume_m3,
                 weight_kg=weight_kg,
+                area_ha=area_ha,
                 time_start=time_start,
                 time_end=time_end,
             )
@@ -242,10 +256,11 @@ class StatisticsStorage:
             for sc in SessionCulture.select().where(SessionCulture.session == s.id):
                 c = sc.culture
                 if c not in culture_stats:
-                    culture_stats[c] = {"unload_count": 0, "volume_m3": 0.0, "weight_kg": 0.0}
+                    culture_stats[c] = {"unload_count": 0, "volume_m3": 0.0, "weight_kg": 0.0, "area_ha": 0.0}
                 culture_stats[c]["unload_count"] += sc.unload_count
                 culture_stats[c]["volume_m3"] += sc.volume_m3
                 culture_stats[c]["weight_kg"] += sc.weight_kg
+                culture_stats[c]["area_ha"] += sc.area_ha
 
         return {
             "date": date_str,
@@ -255,6 +270,7 @@ class StatisticsStorage:
             "efficiency_pct": round(eff, 1),
             "unload_count": sum(s.unload_count for s in sessions),
             "weight_kg": sum(s.weight_kg for s in sessions),
+            "area_ha": sum(s.area_ha for s in sessions),
             "warn_count": sum(s.warn_count for s in sessions),
             "error_count": sum(s.error_count for s in sessions),
             "cultures": culture_stats,
@@ -269,7 +285,7 @@ class StatisticsStorage:
         if not sessions:
             return {
                 "year": year, "days_worked": 0, "threshing_hours": 0.0,
-                "unload_count": 0, "weight_kg": 0.0, "cultures": {},
+                "unload_count": 0, "weight_kg": 0.0, "area_ha": 0.0, "cultures": {},
                 "best_day": None, "best_day_weight_kg": 0.0,
             }
 
@@ -281,10 +297,11 @@ class StatisticsStorage:
             for sc in SessionCulture.select().where(SessionCulture.session == s.id):
                 c = sc.culture
                 if c not in culture_stats:
-                    culture_stats[c] = {"unload_count": 0, "volume_m3": 0.0, "weight_kg": 0.0}
+                    culture_stats[c] = {"unload_count": 0, "volume_m3": 0.0, "weight_kg": 0.0, "area_ha": 0.0}
                 culture_stats[c]["unload_count"] += sc.unload_count
                 culture_stats[c]["volume_m3"] += sc.volume_m3
                 culture_stats[c]["weight_kg"] += sc.weight_kg
+                culture_stats[c]["area_ha"] += sc.area_ha
 
         day_weights: dict = {}
         for s in sessions:
@@ -297,6 +314,7 @@ class StatisticsStorage:
             "threshing_hours": round(thresh_h, 1),
             "unload_count": sum(s.unload_count for s in sessions),
             "weight_kg": sum(s.weight_kg for s in sessions),
+            "area_ha": sum(s.area_ha for s in sessions),
             "cultures": culture_stats,
             "best_day": best_day,
             "best_day_weight_kg": day_weights.get(best_day, 0.0) if best_day else 0.0,

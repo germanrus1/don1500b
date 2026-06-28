@@ -34,6 +34,7 @@ _NAMES_RU = {
     "solomotryas": "Соломотряс",
     "fan_speed":   "Вентилятор",
     "bin_level":   "Бункер",
+    "speed":       "Скорость (колесо)",
 }
 
 

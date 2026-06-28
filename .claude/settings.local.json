@@ -51,7 +51,17 @@
       "Bash(start /B python main.py)",
       "Bash(python main.py)",
       "Bash(kill %1)",
-      "Bash(echo \"PID: $!\")"
+      "Bash(echo \"PID: $!\")",
+      "Bash(git commit --amend -m ' *)",
+      "Bash(pip show *)",
+      "Bash(Remove-Item -ErrorAction SilentlyContinue ROADMAP_tmp1.docx)",
+      "Bash(rm -f ROADMAP_tmp1.docx)",
+      "Bash(xargs ls)",
+      "Bash(find . -iname \"statistics.db\")",
+      "Bash(find . -iname \"*.db\")",
+      "Bash(rm -f run_check.txt)",
+      "Bash(sqlite3 data/statistics.db \"PRAGMA table_info\\(sessions\\);\")",
+      "Bash(git check-ignore *)"
     ]
   }
 }
