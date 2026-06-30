@@ -1,7 +1,15 @@
-# Зависимости для Raspberry Pi 5
-# PyQt6 устанавливается через apt (нет wheel для ARM64)
-# Запустите install.sh — он сам установит всё нужное
+# Зависимости для Raspberry Pi 5 (aarch64)
+#
+# PyQt6 ставится ИЗ PIP, а не из apt:
+#   • на PyPI есть wheel manylinux для ARM64 (aarch64) — версии 6.7.1+;
+#   • только pip-версия PyQt6 содержит модули QtQml / QtQuick /
+#     QtQuickControls2, которые нужны QML-интерфейсу;
+#   • системный apt-пакет python3-pyqt6 их НЕ содержит, поэтому запуск
+#     падает с ModuleNotFoundError: No module named 'PyQt6.QtQml'.
+#
+# Запустите install.sh — он сам создаст venv и установит всё нужное.
 
+PyQt6>=6.7.1
 PyYAML>=6.0.0
 QtAwesome>=1.3.0
 rpi-lgpio>=0.4.0

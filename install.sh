@@ -5,20 +5,34 @@ echo "=== Бортовой компьютер Дон 1500б — установк
 echo ""
 
 # ── Системные пакеты ───────────────────────────────────────────────────────
+# PyQt6 и Qt ставятся из pip (см. requirements-rpi.txt): только pip-версия
+# содержит модули QtQml/QtQuick для QML-интерфейса.
+# Здесь — только системные библиотеки для платформы xcb (libGL, libxcb-*, ...).
 echo "[1/4] Устанавливаем системные пакеты..."
 sudo apt-get update -q
 sudo apt-get install -y \
-    python3-pyqt6 \
-    python3-yaml \
     python3-pip \
     python3-venv \
     libxcb-cursor0 \
-    libgl1
+    libxcb-icccm4 \
+    libxcb-image0 \
+    libxcb-keysyms1 \
+    libxcb-randr0 \
+    libxcb-render-util0 \
+    libxcb-shape0 \
+    libxcb-xfixes0 \
+    libxcb-xinerama0 \
+    libxkbcommon-x11-0 \
+    libgl1 \
+    libegl1 \
+    libdbus-1-3 \
+    libfontconfig1
 
 # ── Виртуальное окружение ──────────────────────────────────────────────────
 echo "[2/4] Создаём виртуальное окружение..."
-# --system-site-packages нужен чтобы venv видел системный python3-pyqt6
-python3 -m venv --system-site-packages .venv
+# Чистый venv без --system-site-packages: все зависимости (включая PyQt6)
+# берём из pip, чтобы гарантированно была версия с QtQml.
+python3 -m venv .venv
 
 # ── Pip зависимости ────────────────────────────────────────────────────────
 echo "[3/4] Устанавливаем pip зависимости..."
