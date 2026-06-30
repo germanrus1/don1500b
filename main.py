@@ -6,7 +6,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Material")
 
 from PyQt6.QtCore import QUrl
-from PyQt6.QtGui import QGuiApplication
+from PyQt6.QtGui import QGuiApplication, QFontDatabase
 from PyQt6.QtQml import QQmlApplicationEngine
 from PyQt6.QtWidgets import QApplication
 
@@ -17,7 +17,14 @@ from app.sensors.sensor_controller import SensorController
 from app.stats.statistics_collector import StatisticsCollector
 from app.stats.statistics_storage import StatisticsStorage
 
-QML_DIR = Path(__file__).parent / "qml"
+ROOT_DIR = Path(__file__).parent
+QML_DIR  = ROOT_DIR / "qml"
+
+# Шрифт Material Design Icons лежит в репозитории (assets/fonts/), чтобы
+# иконки работали на любой ОС сразу после git clone, без зависимости от
+# абсолютного пути к site-packages qtawesome.
+MDI_FONT = ROOT_DIR / "assets" / "fonts" / "materialdesignicons6-webfont-6.9.96.ttf"
+MDI_FAMILY = "Material Design Icons"
 
 
 def main() -> int:
@@ -25,6 +32,14 @@ def main() -> int:
 
     # QApplication нужен для диалогов; QGuiApplication достаточен для чистого QML
     app = QApplication(sys.argv)
+
+    # Регистрируем MDI-шрифт глобально — после этого font.family: "Material
+    # Design Icons" в QML работает на Windows, Linux и Raspberry Pi OS.
+    font_id = QFontDatabase.addApplicationFont(str(MDI_FONT))
+    if font_id == -1:
+        print(f"Не удалось загрузить шрифт иконок: {MDI_FONT}", file=sys.stderr)
+    elif MDI_FAMILY not in QFontDatabase.applicationFontFamilies(font_id):
+        print(f"Шрифт загрузился, но семейство {MDI_FAMILY!r} не найдено", file=sys.stderr)
 
     logger    = DataLogger(config.logging_config)
     logger.log_system("start")

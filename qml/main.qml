@@ -10,11 +10,9 @@ ApplicationWindow {
     visible: true
     title: "Дон 1500б"
 
-    // Загрузка шрифта MDI
-    FontLoader {
-        id: mdiFont
-        source: "file:///C:/Users/mrger/AppData/Roaming/Python/Python311/site-packages/qtawesome/fonts/materialdesignicons6-webfont-6.9.96.ttf"
-    }
+    // Шрифт MDI (Material Design Icons) регистрируется из Python в main.py
+    // через QFontDatabase.addApplicationFont — он лежит в assets/fonts/ и
+    // доступен на любой ОС. Здесь остаётся только ссылка на семейство.
 
     flags: (bridge && bridge.windowMode === "fullscreen")
            ? Qt.FramelessWindowHint
