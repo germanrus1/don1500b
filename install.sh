@@ -31,13 +31,21 @@ sudo apt-get install -y \
 # ── Виртуальное окружение ──────────────────────────────────────────────────
 echo "[2/4] Создаём виртуальное окружение..."
 # Чистый venv без --system-site-packages: все зависимости (включая PyQt6)
-# берём из pip, чтобы гарантированно была версия с QtQml.
+# берём из pip, чтобы гарантированно была версия с QtQml/QtQuick.
+# Если остался старый venv с --system-site-packages (от прежнего install.sh),
+# он «протекает» системным PyQt6 без модулей QtQuick — пересоздаём чистым.
+if [ -f .venv/pyvenv.cfg ] && grep -q "^include-system-site-packages = true" .venv/pyvenv.cfg; then
+    echo "    устаревший venv (--system-site-packages) — пересоздаём"
+    rm -rf .venv
+fi
 python3 -m venv .venv
 
 # ── Pip зависимости ────────────────────────────────────────────────────────
 echo "[3/4] Устанавливаем pip зависимости..."
 .venv/bin/pip install --upgrade pip --quiet
-.venv/bin/pip install -r requirements-rpi.txt --quiet
+# --only-binary=PyQt6,PyQt6-Qt6 — только wheel (есть для aarch64, manylinux_2_28),
+# чтобы pip не пытался собирать Qt из исходников на старом glibc.
+.venv/bin/pip install --only-binary=PyQt6,PyQt6-Qt6 -r requirements-rpi.txt --quiet
 
 # ── Права GPIO ────────────────────────────────────────────────────────────
 echo "[4/4] Настраиваем права доступа к GPIO..."
